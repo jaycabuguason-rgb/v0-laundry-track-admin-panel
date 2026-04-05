@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Download, FileText, Phone } from "lucide-react";
+import { Download, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -72,6 +72,11 @@ const exportOptions = [
 
 export default function ReportsPage() {
   const [revenueRange, setRevenueRange] = useState<"day" | "week" | "month">("week");
+
+  // Per-row claim status for the Unclaimed Items tab
+  const [claimStatuses, setClaimStatuses] = useState<Record<string, "unclaimed" | "claimed">>(
+    () => Object.fromEntries(unclaimedItems.map((t) => [t.id, "unclaimed"]))
+  );
 
   // Peak
   const [peakPeriod, setPeakPeriod] = useState<PeakPeriod>("hour");
@@ -237,7 +242,7 @@ export default function ReportsPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-y border-border bg-muted/40">
-                    {["Ticket ID", "Customer Name", "Contact", "Arrival Date & Time", "Days Waiting", "Action"].map((h) => (
+                    {["Ticket ID", "Customer Name", "Contact", "Arrival Date & Time", "Days Waiting", "Status"].map((h) => (
                       <th key={h} className="text-left text-xs font-medium text-muted-foreground px-4 py-2.5 whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
@@ -245,21 +250,50 @@ export default function ReportsPage() {
                 <tbody>
                   {unclaimedItems.map((t) => {
                     const daysWaiting = Math.floor((new Date("2026-04-05").getTime() - new Date(t.dropOffDate).getTime()) / 86400000);
+                    const isClaimed = claimStatuses[t.id] === "claimed";
                     return (
-                      <tr key={t.id} className="border-b border-border last:border-0 hover:bg-muted/20">
-                        <td className="px-4 py-3 text-xs font-mono text-primary">{t.ticketId}</td>
-                        <td className="px-4 py-3 text-xs font-medium text-foreground">{t.customerName}</td>
-                        <td className="px-4 py-3 text-xs text-muted-foreground">{t.phone}</td>
-                        <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">{t.arrivalDateTime}</td>
+                      <tr
+                        key={t.id}
+                        className={cn(
+                          "border-b border-border last:border-0 transition-colors",
+                          isClaimed ? "bg-muted/30 opacity-50" : "hover:bg-muted/20"
+                        )}
+                      >
+                        <td className={cn("px-4 py-3 text-xs font-mono text-primary", isClaimed && "line-through")}>{t.ticketId}</td>
+                        <td className={cn("px-4 py-3 text-xs font-medium text-foreground", isClaimed && "line-through")}>{t.customerName}</td>
+                        <td className={cn("px-4 py-3 text-xs text-muted-foreground", isClaimed && "line-through")}>{t.phone}</td>
+                        <td className={cn("px-4 py-3 text-xs text-muted-foreground whitespace-nowrap", isClaimed && "line-through")}>{t.arrivalDateTime}</td>
                         <td className="px-4 py-3">
-                          <span className={cn("text-xs font-medium", daysWaiting > 1 ? "text-orange-600" : "text-muted-foreground")}>
+                          <span className={cn("text-xs font-medium", isClaimed ? "text-muted-foreground line-through" : daysWaiting > 1 ? "text-orange-600" : "text-muted-foreground")}>
                             {daysWaiting} day{daysWaiting !== 1 ? "s" : ""}
                           </span>
                         </td>
                         <td className="px-4 py-3">
-                          <Button size="sm" variant="outline" className="h-7 text-xs flex items-center gap-1">
-                            <Phone className="w-3 h-3" /> Contact
-                          </Button>
+                          <Select
+                            value={claimStatuses[t.id]}
+                            onValueChange={(v) =>
+                              setClaimStatuses((prev) => ({ ...prev, [t.id]: v as "unclaimed" | "claimed" }))
+                            }
+                          >
+                            <SelectTrigger
+                              className={cn(
+                                "h-7 w-32 text-[11px] font-medium border",
+                                isClaimed
+                                  ? "bg-green-50 text-green-700 border-green-200"
+                                  : "bg-orange-50 text-orange-700 border-orange-200"
+                              )}
+                            >
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="unclaimed" className="text-xs text-orange-700">
+                                Unclaimed
+                              </SelectItem>
+                              <SelectItem value="claimed" className="text-xs text-green-700">
+                                Claimed
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
                         </td>
                       </tr>
                     );
