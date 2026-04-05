@@ -18,6 +18,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   WashingMachine,
+  Upload,
 } from "lucide-react";
 
 export type Page =
@@ -31,7 +32,8 @@ export type Page =
   | "settings-backup"
   | "loyalty"
   | "profile"
-  | "change-password";
+  | "change-password"
+  | "settings-data-import";
 
 interface SidebarProps {
   activePage: Page;
@@ -51,6 +53,7 @@ const settingsSubItems = [
   { id: "settings-service-types" as Page, label: "Service Types", icon: Tag },
   { id: "settings-business-profile" as Page, label: "Business Profile", icon: Building2 },
   { id: "settings-backup" as Page, label: "Backup & Restore", icon: Database },
+  { id: "settings-data-import" as Page, label: "Data Import", icon: Upload },
 ];
 
 export default function Sidebar({ activePage, onNavigate }: SidebarProps) {

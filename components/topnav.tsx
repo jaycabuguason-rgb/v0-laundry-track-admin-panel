@@ -34,6 +34,7 @@ const pageTitles: Record<Page, string> = {
   loyalty: "Loyalty Members",
   profile: "My Profile",
   "change-password": "Change Password",
+  "settings-data-import": "Settings — Data Import",
 };
 
 const notifTypeColors: Record<Notification["type"], string> = {

@@ -11,6 +11,7 @@ import SettingsPage from "@/components/pages/settings";
 import LoyaltyPage from "@/components/pages/loyalty";
 import ProfilePage from "@/components/pages/profile";
 import ChangePasswordPage from "@/components/pages/change-password";
+import DataImportPage from "@/components/pages/data-import";
 import type { AdminProfile } from "@/app/page";
 
 interface AppShellProps {
@@ -34,6 +35,8 @@ export default function AppShell({ onSignOut, adminProfile, onProfileUpdate }: A
       case "settings-business-profile":
       case "settings-backup":
         return <SettingsPage page={activePage} />;
+      case "settings-data-import":
+        return <DataImportPage onViewTransactions={() => handleNavigate("transactions")} />;
       case "loyalty": return <LoyaltyPage />;
       case "profile": return <ProfilePage adminProfile={adminProfile} />;
       case "change-password": return <ChangePasswordPage adminProfile={adminProfile} onProfileUpdate={onProfileUpdate} />;
