@@ -20,6 +20,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { type Page } from "@/components/sidebar";
+import type { AdminProfile } from "@/app/page";
 
 const pageTitles: Record<Page, string> = {
   dashboard: "Dashboard",
@@ -46,9 +47,10 @@ interface TopNavProps {
   activePage: Page;
   onNavigate: (page: Page) => void;
   onSignOut: () => void;
+  adminProfile: AdminProfile;
 }
 
-export default function TopNav({ activePage, onNavigate, onSignOut }: TopNavProps) {
+export default function TopNav({ activePage, onNavigate, onSignOut, adminProfile }: TopNavProps) {
   const [notifications, setNotifications] = useState<Notification[]>(initialNotifications);
   const [notifOpen, setNotifOpen] = useState(false);
   const [signOutOpen, setSignOutOpen] = useState(false);
@@ -149,16 +151,16 @@ export default function TopNav({ activePage, onNavigate, onSignOut }: TopNavProp
                 <User className="w-4 h-4 text-primary-foreground" />
               </div>
               <div className="text-left hidden sm:block">
-                <p className="text-xs font-semibold text-foreground leading-none">Admin</p>
-                <p className="text-[11px] text-muted-foreground mt-0.5">admin@laundrytrack.ph</p>
+                <p className="text-xs font-semibold text-foreground leading-none">{adminProfile.name}</p>
+                <p className="text-[11px] text-muted-foreground mt-0.5">{adminProfile.email}</p>
               </div>
               <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48">
             <div className="px-3 py-2 border-b border-border">
-              <p className="text-xs font-semibold text-foreground">Admin</p>
-              <p className="text-[11px] text-muted-foreground">admin@laundrytrack.ph</p>
+              <p className="text-xs font-semibold text-foreground">{adminProfile.name}</p>
+              <p className="text-[11px] text-muted-foreground">{adminProfile.email}</p>
             </div>
             <DropdownMenuItem
               className="cursor-pointer mt-1"

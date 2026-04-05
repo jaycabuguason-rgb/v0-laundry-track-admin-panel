@@ -11,12 +11,15 @@ import SettingsPage from "@/components/pages/settings";
 import LoyaltyPage from "@/components/pages/loyalty";
 import ProfilePage from "@/components/pages/profile";
 import ChangePasswordPage from "@/components/pages/change-password";
+import type { AdminProfile } from "@/app/page";
 
 interface AppShellProps {
   onSignOut: () => void;
+  adminProfile: AdminProfile;
+  onProfileUpdate: (updates: Partial<AdminProfile>) => void;
 }
 
-export default function AppShell({ onSignOut }: AppShellProps) {
+export default function AppShell({ onSignOut, adminProfile, onProfileUpdate }: AppShellProps) {
   const [activePage, setActivePage] = useState<Page>("dashboard");
 
   const renderPage = () => {
@@ -31,8 +34,8 @@ export default function AppShell({ onSignOut }: AppShellProps) {
       case "settings-backup":
         return <SettingsPage page={activePage} />;
       case "loyalty": return <LoyaltyPage />;
-      case "profile": return <ProfilePage />;
-      case "change-password": return <ChangePasswordPage />;
+      case "profile": return <ProfilePage adminProfile={adminProfile} />;
+      case "change-password": return <ChangePasswordPage adminProfile={adminProfile} onProfileUpdate={onProfileUpdate} />;
       default: return <DashboardPage />;
     }
   };
@@ -41,7 +44,7 @@ export default function AppShell({ onSignOut }: AppShellProps) {
     <div className="flex h-screen overflow-hidden bg-background">
       <Sidebar activePage={activePage} onNavigate={setActivePage} />
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
-        <TopNav activePage={activePage} onNavigate={setActivePage} onSignOut={onSignOut} />
+        <TopNav activePage={activePage} onNavigate={setActivePage} onSignOut={onSignOut} adminProfile={adminProfile} />
         <main className="flex-1 overflow-y-auto p-6">
           {renderPage()}
         </main>

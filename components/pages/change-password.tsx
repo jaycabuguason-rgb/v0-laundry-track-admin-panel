@@ -1,12 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { Eye, EyeOff, Save, X, CheckCircle2, Circle } from "lucide-react";
+import { Eye, EyeOff, Save, CheckCircle2, Circle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import type { AdminProfile } from "@/app/page";
 
 interface Requirement {
   label: string;
@@ -24,9 +25,8 @@ function getStrength(pw: string): { level: 0 | 1 | 2 | 3; label: string; color: 
   const passed = requirements.filter((r) => r.test(pw)).length;
   if (pw.length === 0) return { level: 0, label: "",       color: "" };
   if (passed <= 1)     return { level: 1, label: "Weak",   color: "bg-red-500" };
-  if (passed <= 2)     return { level: 2, label: "Fair",   color: "bg-yellow-500" };
   if (passed <= 3)     return { level: 2, label: "Fair",   color: "bg-yellow-500" };
-  return               { level: 3, label: "Strong", color: "bg-green-500" };
+  return                      { level: 3, label: "Strong", color: "bg-green-500" };
 }
 
 function PasswordInput({
@@ -68,30 +68,133 @@ function PasswordInput({
   );
 }
 
-export default function ChangePasswordPage() {
-  const [current, setCurrent]     = useState("");
-  const [newPw, setNewPw]         = useState("");
-  const [confirm, setConfirm]     = useState("");
-  const [success, setSuccess]     = useState(false);
+interface ChangePasswordPageProps {
+  adminProfile: AdminProfile;
+  onProfileUpdate: (updates: Partial<AdminProfile>) => void;
+}
 
-  const strength = getStrength(newPw);
-  const allPassed = requirements.every((r) => r.test(newPw));
-  const passwordsMatch = newPw.length > 0 && newPw === confirm;
-  const canSave = current.length > 0 && allPassed && passwordsMatch;
+export default function ChangePasswordPage({ adminProfile, onProfileUpdate }: ChangePasswordPageProps) {
+  // --- Update Login Credentials state ---
+  const [credCurrentEmail, setCredCurrentEmail] = useState(adminProfile.email);
+  const [newEmail, setNewEmail]                 = useState("");
+  const [newUsername, setNewUsername]           = useState("");
+  const [credPassword, setCredPassword]         = useState("");
+  const [credSuccess, setCredSuccess]           = useState(false);
 
-  const handleSave = () => {
-    if (!canSave) return;
-    setSuccess(true);
-    setCurrent(""); setNewPw(""); setConfirm("");
-    setTimeout(() => setSuccess(false), 4000);
+  const credCanSave = credPassword.trim().length > 0;
+
+  const handleCredSave = () => {
+    if (!credCanSave) return;
+    const updates: Partial<AdminProfile> = {};
+    if (newEmail.trim())    updates.email    = newEmail.trim();
+    if (newUsername.trim()) updates.name     = newUsername.trim();
+    onProfileUpdate(updates);
+    // Reflect new email in current email field
+    setCredCurrentEmail(newEmail.trim() || adminProfile.email);
+    setNewEmail("");
+    setNewUsername("");
+    setCredPassword("");
+    setCredSuccess(true);
+    setTimeout(() => setCredSuccess(false), 4000);
   };
 
-  const handleCancel = () => {
-    setCurrent(""); setNewPw(""); setConfirm(""); setSuccess(false);
+  // --- Change Password state ---
+  const [current, setCurrent] = useState("");
+  const [newPw, setNewPw]     = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [pwSuccess, setPwSuccess] = useState(false);
+
+  const strength    = getStrength(newPw);
+  const allPassed   = requirements.every((r) => r.test(newPw));
+  const pwMatch     = newPw.length > 0 && newPw === confirm;
+  const canSavePw   = current.length > 0 && allPassed && pwMatch;
+
+  const handleSavePw = () => {
+    if (!canSavePw) return;
+    setPwSuccess(true);
+    setCurrent(""); setNewPw(""); setConfirm("");
+    setTimeout(() => setPwSuccess(false), 4000);
   };
 
   return (
-    <div className="max-w-md space-y-5">
+    <div className="max-w-md space-y-6">
+
+      {/* ── Update Login Credentials ── */}
+      <Card className="border border-border shadow-none">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm">Update Login Credentials</CardTitle>
+          <CardDescription className="text-xs">
+            Update the email and username used to log in.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div>
+            <Label htmlFor="cred-current-email" className="text-xs font-medium mb-1.5 block">
+              Current Email Address
+            </Label>
+            <Input
+              id="cred-current-email"
+              type="email"
+              value={credCurrentEmail}
+              onChange={(e) => setCredCurrentEmail(e.target.value)}
+              className="h-9 text-sm"
+            />
+          </div>
+
+          <div>
+            <Label htmlFor="cred-new-email" className="text-xs font-medium mb-1.5 block">
+              New Email Address
+            </Label>
+            <Input
+              id="cred-new-email"
+              type="email"
+              value={newEmail}
+              onChange={(e) => { setNewEmail(e.target.value); setCredSuccess(false); }}
+              placeholder="Enter new email address"
+              className="h-9 text-sm"
+            />
+          </div>
+
+          <div>
+            <Label htmlFor="cred-new-username" className="text-xs font-medium mb-1.5 block">
+              New Username <span className="text-muted-foreground font-normal">(optional)</span>
+            </Label>
+            <Input
+              id="cred-new-username"
+              type="text"
+              value={newUsername}
+              onChange={(e) => { setNewUsername(e.target.value); setCredSuccess(false); }}
+              placeholder="Enter new username"
+              className="h-9 text-sm"
+            />
+          </div>
+
+          <PasswordInput
+            id="cred-password"
+            label="Current Password (required to confirm changes)"
+            value={credPassword}
+            onChange={(v) => { setCredPassword(v); setCredSuccess(false); }}
+            placeholder="Enter current password to confirm"
+          />
+
+          <Button
+            className="w-full cursor-pointer"
+            disabled={!credCanSave}
+            onClick={handleCredSave}
+          >
+            Save Changes
+          </Button>
+
+          {credSuccess && (
+            <p className="text-xs text-green-600 font-medium flex items-center gap-1.5">
+              <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+              Login credentials updated successfully!
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* ── Change Password ── */}
       <Card className="border border-border shadow-none">
         <CardHeader className="pb-3">
           <CardTitle className="text-sm">Change Password</CardTitle>
@@ -100,7 +203,6 @@ export default function ChangePasswordPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Current password */}
           <PasswordInput
             id="current-pw"
             label="Current Password"
@@ -109,12 +211,11 @@ export default function ChangePasswordPage() {
             placeholder="Enter current password"
           />
 
-          {/* New password */}
           <PasswordInput
             id="new-pw"
             label="New Password"
             value={newPw}
-            onChange={(v) => { setNewPw(v); setSuccess(false); }}
+            onChange={(v) => { setNewPw(v); setPwSuccess(false); }}
             placeholder="Enter new password"
           />
 
@@ -154,7 +255,7 @@ export default function ChangePasswordPage() {
                 <div key={req.label} className="flex items-center gap-2">
                   {passed
                     ? <CheckCircle2 className="w-3.5 h-3.5 text-green-500 shrink-0" />
-                    : <Circle className="w-3.5 h-3.5 text-muted-foreground/50 shrink-0" />
+                    : <Circle      className="w-3.5 h-3.5 text-muted-foreground/50 shrink-0" />
                   }
                   <span className={cn(
                     "text-xs transition-colors",
@@ -167,49 +268,36 @@ export default function ChangePasswordPage() {
             })}
           </div>
 
-          {/* Confirm password */}
           <PasswordInput
             id="confirm-pw"
             label="Confirm New Password"
             value={confirm}
-            onChange={(v) => { setConfirm(v); setSuccess(false); }}
+            onChange={(v) => { setConfirm(v); setPwSuccess(false); }}
             placeholder="Re-enter new password"
           />
 
-          {/* Mismatch warning */}
-          {confirm.length > 0 && !passwordsMatch && (
+          {confirm.length > 0 && !pwMatch && (
             <p className="text-xs text-destructive">Passwords do not match.</p>
+          )}
+
+          <Button
+            className="w-full cursor-pointer"
+            disabled={!canSavePw}
+            onClick={handleSavePw}
+          >
+            <Save className="w-3.5 h-3.5 mr-1.5" />
+            Save New Password
+          </Button>
+
+          {pwSuccess && (
+            <p className="text-xs text-green-600 font-medium flex items-center gap-1.5">
+              <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+              Password changed successfully!
+            </p>
           )}
         </CardContent>
       </Card>
 
-      {/* Actions */}
-      <div className="flex items-center gap-2">
-        <Button
-          size="sm"
-          disabled={!canSave}
-          onClick={handleSave}
-          className="flex items-center gap-1.5"
-        >
-          <Save className="w-3.5 h-3.5" />
-          Save New Password
-        </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={handleCancel}
-          className="flex items-center gap-1.5"
-        >
-          <X className="w-3.5 h-3.5" />
-          Cancel
-        </Button>
-        {success && (
-          <span className="text-xs text-green-600 font-medium flex items-center gap-1">
-            <CheckCircle2 className="w-3.5 h-3.5" />
-            Password changed successfully!
-          </span>
-        )}
-      </div>
     </div>
   );
 }
