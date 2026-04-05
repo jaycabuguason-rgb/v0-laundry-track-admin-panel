@@ -36,7 +36,7 @@ export default function TopNav({ activePage }: TopNavProps) {
 
       <div className="flex items-center gap-3">
         {/* Notifications */}
-        <button className="relative p-2 rounded-md hover:bg-accent transition-colors">
+        <button className="relative p-2 rounded-md cursor-pointer hover:bg-accent transition-colors active:scale-95">
           <Bell className="w-4.5 h-4.5 text-muted-foreground" />
           <Badge className="absolute -top-0.5 -right-0.5 h-4 w-4 p-0 flex items-center justify-center text-[10px] bg-primary text-white border-0">
             3
@@ -46,7 +46,7 @@ export default function TopNav({ activePage }: TopNavProps) {
         {/* Admin profile */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button className="flex items-center gap-2 rounded-md px-2.5 py-1.5 hover:bg-accent transition-colors">
+            <button className="flex items-center gap-2 rounded-md px-2.5 py-1.5 cursor-pointer hover:bg-accent transition-colors active:scale-95">
               <div className="w-7 h-7 rounded-full bg-primary flex items-center justify-center shrink-0">
                 <User className="w-4 h-4 text-white" />
               </div>
