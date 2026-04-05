@@ -162,70 +162,24 @@ export default function ReportsPage() {
     URL.revokeObjectURL(url);
   };
 
-  // ── Native print-to-PDF export ───────────────────────────────────────────────
-  const handlePdfExport = () => {
-    const mkTable = (headers: string[], rows: (string | number)[][]) => `
-      <table>
-        <thead><tr>${headers.map((h) => `<th>${h}</th>`).join("")}</tr></thead>
-        <tbody>${rows.map((r) => `<tr>${r.map((c) => `<td>${c}</td>`).join("")}</tr>`).join("")}</tbody>
-      </table>`;
+  // ── @react-pdf/renderer PDF export ───────────────────────────────────────────
+  const [pdfGenerating, setPdfGenerating] = useState(false);
 
-    let body = "";
-
-    if (selectedExports.includes("transactions")) {
-      body += `<h2>Transactions</h2>${mkTable(
-        ["Ticket ID", "Customer", "Phone", "Drop-off", "Wash Type", "Weight", "Fee", "Status"],
-        filteredTxns.map((t) => [t.ticketId, t.customerName, t.phone, t.dropOffDate, t.washType, `${t.weight} kg`, `PHP ${t.fee}`, t.status])
-      )}`;
-    }
-    if (selectedExports.includes("analytics")) {
-      body += `<h2>Revenue by Service Type</h2>${mkTable(
-        ["Service", "Transactions", "Revenue (PHP)", "Avg per Order (PHP)"],
-        serviceRevenueData.map((r) => [r.service, r.count, r.revenue.toLocaleString(), Math.round(r.revenue / r.count)])
-      )}`;
-    }
-    if (selectedExports.includes("customers")) {
-      const seen = new Set<string>();
-      const custRows: (string | number)[][] = [];
-      filteredTxns.forEach((t) => {
-        if (!seen.has(t.phone)) {
-          seen.add(t.phone);
-          const ct = filteredTxns.filter((x) => x.phone === t.phone);
-          custRows.push([t.customerName, t.phone, ct.length, ct.reduce((s, x) => s + x.fee, 0)]);
-        }
+  const handlePdfExport = async () => {
+    if (pdfGenerating) return;
+    setPdfGenerating(true);
+    try {
+      const { downloadReportPdf } = await import("@/components/report-pdf");
+      await downloadReportPdf({
+        exportFrom,
+        exportTo,
+        sections: selectedExports as ("transactions" | "analytics" | "customers")[],
+        transactions: filteredTxns,
+        serviceRevenue: serviceRevenueData,
       });
-      body += `<h2>Customer List</h2>${mkTable(["Name", "Phone", "Transactions", "Total Spent (PHP)"], custRows)}`;
+    } finally {
+      setPdfGenerating(false);
     }
-
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
-      <title>LaundryTrack Report</title>
-      <style>
-        *{box-sizing:border-box}
-        body{font-family:Arial,sans-serif;font-size:11px;padding:24px;color:#111;margin:0}
-        .header{background:#1d4ed8;color:#fff;padding:12px 16px;border-radius:6px;margin-bottom:6px}
-        .header h1{margin:0;font-size:16px}
-        .header p{margin:4px 0 0;font-size:10px;opacity:0.85}
-        h2{font-size:12px;color:#1d4ed8;margin:20px 0 6px;border-bottom:1px solid #dbeafe;padding-bottom:4px}
-        table{width:100%;border-collapse:collapse;margin-bottom:12px}
-        th{background:#1d4ed8;color:#fff;text-align:left;padding:5px 7px;font-size:10px}
-        td{padding:4px 7px;border-bottom:1px solid #e5e7eb;font-size:10px}
-        tr:nth-child(even) td{background:#f8fafc}
-        @media print{body{padding:12px}}
-      </style></head>
-      <body>
-        <div class="header">
-          <h1>LaundryTrack — Export Report</h1>
-          <p>Date range: ${exportFrom} to ${exportTo} &nbsp;|&nbsp; Generated: ${new Date().toLocaleDateString()}</p>
-        </div>
-        ${body}
-      </body></html>`;
-
-    const w = window.open("", "_blank");
-    if (!w) return;
-    w.document.write(html);
-    w.document.close();
-    w.focus();
-    setTimeout(() => w.print(), 300);
   };
 
   const [summaryDate, setSummaryDate] = useState<Date>(new Date("2026-04-05"));
@@ -590,15 +544,16 @@ export default function ReportsPage() {
             {/* Export button */}
             <Button
               size="sm"
-              disabled={selectedExports.length === 0}
+              disabled={selectedExports.length === 0 || pdfGenerating}
               className="flex items-center gap-1.5 w-full"
               onClick={exportFormat === "pdf" ? handlePdfExport : handleCsvExport}
             >
               {exportFormat === "pdf"
                 ? <FileText className="w-3.5 h-3.5" />
                 : <Download className="w-3.5 h-3.5" />}
-              Export as {exportFormat.toUpperCase()}
-              {selectedExports.length > 0 && ` (${selectedExports.length} selected)`}
+              {pdfGenerating
+                ? "Generating PDF…"
+                : `Export as ${exportFormat.toUpperCase()}${selectedExports.length > 0 ? ` (${selectedExports.length} selected)` : ""}`}
             </Button>
           </CardContent>
         </Card>
