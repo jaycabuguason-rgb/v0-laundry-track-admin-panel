@@ -146,6 +146,13 @@ export default function ChangePasswordPage({ adminProfile, onProfileUpdate }: Ch
             />
           </div>
 
+          <Button
+            className="w-full cursor-pointer bg-primary text-primary-foreground hover:bg-primary/90"
+            onClick={handleCredSave}
+          >
+            Save Changes
+          </Button>
+
           {credSuccess && (
             <p className="text-xs text-green-600 font-medium flex items-center gap-1.5">
               <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
