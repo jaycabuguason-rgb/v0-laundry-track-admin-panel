@@ -18,7 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { transactions as initialTxns, statusColors, statusOrder, type Transaction, type TransactionStatus } from "@/lib/data";
+import { transactions as initialTxns, statusColors, statusOrder, type Transaction } from "@/lib/data";
 import { cn } from "@/lib/utils";
 import { Textarea } from "@/components/ui/textarea";
 
@@ -58,19 +58,19 @@ export default function TransactionsPage() {
 
   return (
     <div className="space-y-4">
-      {/* Filter bar */}
-      <div className="bg-card border border-border rounded-lg p-4 flex flex-wrap gap-3">
-        <div className="relative flex-1 min-w-48">
+      {/* Filter bar — stacks on mobile */}
+      <div className="bg-card border border-border rounded-lg p-3 md:p-4 flex flex-col sm:flex-row flex-wrap gap-3">
+        <div className="relative flex-1 min-w-0 sm:min-w-48">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
             placeholder="Search by name or ticket ID..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="pl-9 h-9 text-sm"
+            className="pl-9 h-10 md:h-9 text-sm w-full"
           />
         </div>
         <Select value={filterStatus} onValueChange={setFilterStatus}>
-          <SelectTrigger className="w-40 h-9 text-sm">
+          <SelectTrigger className="w-full sm:w-40 h-10 md:h-9 text-sm">
             <SelectValue placeholder="All Status" />
           </SelectTrigger>
           <SelectContent>
@@ -80,20 +80,23 @@ export default function TransactionsPage() {
             ))}
           </SelectContent>
         </Select>
-        <Input type="date" defaultValue="2026-04-05" className="w-40 h-9 text-sm" />
+        <Input type="date" defaultValue="2026-04-05" className="w-full sm:w-40 h-10 md:h-9 text-sm" />
       </div>
 
-      {/* Table */}
+      {/* Table — horizontally scrollable */}
       <div className="bg-card border border-border rounded-lg overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-sm min-w-[640px]">
             <thead>
               <tr className="border-b border-border bg-muted/40">
-                {["Ticket ID", "Customer Name", "Arrival Date & Time", "Weight (kg)", "Wash Type", "Fee", "Status", "Actions"].map((h) => (
-                  <th key={h} className="text-left text-xs font-medium text-muted-foreground px-4 py-3 whitespace-nowrap">
-                    {h}
-                  </th>
-                ))}
+                <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3 whitespace-nowrap">Ticket ID</th>
+                <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3 whitespace-nowrap">Customer Name</th>
+                <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3 whitespace-nowrap hidden md:table-cell">Arrival Date & Time</th>
+                <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3 whitespace-nowrap hidden sm:table-cell">Weight</th>
+                <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3 whitespace-nowrap hidden md:table-cell">Wash Type</th>
+                <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3 whitespace-nowrap">Fee</th>
+                <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3 whitespace-nowrap">Status</th>
+                <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3 whitespace-nowrap">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -101,27 +104,27 @@ export default function TransactionsPage() {
                 <tr key={txn.id} className="border-b border-border last:border-0 hover:bg-muted/20 transition-colors">
                   <td className="px-4 py-3 text-xs font-mono font-semibold text-primary">{txn.ticketId}</td>
                   <td className="px-4 py-3 text-xs font-medium text-foreground">{txn.customerName}</td>
-                  <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">{txn.arrivalDateTime}</td>
-                  <td className="px-4 py-3 text-xs text-muted-foreground">{txn.weight} kg</td>
-                  <td className="px-4 py-3 text-xs text-muted-foreground">{txn.washType}</td>
+                  <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap hidden md:table-cell">{txn.arrivalDateTime}</td>
+                  <td className="px-4 py-3 text-xs text-muted-foreground hidden sm:table-cell">{txn.weight} kg</td>
+                  <td className="px-4 py-3 text-xs text-muted-foreground hidden md:table-cell">{txn.washType}</td>
                   <td className="px-4 py-3 text-xs font-medium text-foreground">₱{txn.fee}</td>
                   <td className="px-4 py-3">
-                    <span className={cn("inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium", statusColors[txn.status])}>
+                    <span className={cn("inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium whitespace-nowrap", statusColors[txn.status])}>
                       {txn.status}
                     </span>
                   </td>
                   <td className="px-4 py-3">
-                    <div className="flex items-center gap-1">
-                      <Button variant="ghost" size="icon" className="h-7 w-7" title="View" onClick={() => openModal(txn)}>
+                    <div className="flex items-center gap-0.5">
+                      <Button variant="ghost" size="icon" className="h-8 w-8" title="View" onClick={() => openModal(txn)}>
                         <Eye className="w-3.5 h-3.5" />
                       </Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7" title="Edit" onClick={() => openModal(txn)}>
+                      <Button variant="ghost" size="icon" className="h-8 w-8" title="Edit" onClick={() => openModal(txn)}>
                         <Edit className="w-3.5 h-3.5" />
                       </Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" title="Void">
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" title="Void">
                         <Ban className="w-3.5 h-3.5" />
                       </Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7" title="Reprint">
+                      <Button variant="ghost" size="icon" className="h-8 w-8 hidden sm:flex" title="Reprint">
                         <Printer className="w-3.5 h-3.5" />
                       </Button>
                     </div>
@@ -140,9 +143,9 @@ export default function TransactionsPage() {
         </div>
       </div>
 
-      {/* Transaction Modal */}
+      {/* Transaction Modal — full screen on mobile */}
       <Dialog open={!!selectedTxn} onOpenChange={(open) => !open && setSelectedTxn(null)}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="w-[calc(100vw-1rem)] sm:w-auto max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Ticket Details — {selectedTxn?.ticketId}</DialogTitle>
             <DialogDescription>
@@ -153,17 +156,17 @@ export default function TransactionsPage() {
           {selectedTxn && (
             <div className="space-y-5">
               {/* Details */}
-              <div className="grid grid-cols-2 gap-3 text-sm">
+              <div className="grid grid-cols-2 gap-2 md:gap-3 text-sm">
                 {[
-                  { label: "Customer",           value: selectedTxn.customerName },
-                  { label: "Phone",              value: selectedTxn.phone },
+                  { label: "Customer",            value: selectedTxn.customerName },
+                  { label: "Phone",               value: selectedTxn.phone },
                   { label: "Arrival Date & Time", value: selectedTxn.arrivalDateTime },
-                  { label: "Wash Type",          value: selectedTxn.washType },
-                  { label: "Weight",             value: `${selectedTxn.weight} kg` },
-                  { label: "Fee",                value: `₱${selectedTxn.fee}` },
-                  { label: "Add-ons",            value: selectedTxn.addOns.length ? selectedTxn.addOns.join(", ") : "None" },
+                  { label: "Wash Type",           value: selectedTxn.washType },
+                  { label: "Weight",              value: `${selectedTxn.weight} kg` },
+                  { label: "Fee",                 value: `₱${selectedTxn.fee}` },
+                  { label: "Add-ons",             value: selectedTxn.addOns.length ? selectedTxn.addOns.join(", ") : "None" },
                 ].map((row) => (
-                  <div key={row.label} className={cn("bg-muted/30 rounded-md p-3", row.label === "Arrival Date & Time" && "col-span-2")}>
+                  <div key={row.label} className={cn("bg-muted/30 rounded-md p-2.5 md:p-3", row.label === "Arrival Date & Time" && "col-span-2")}>
                     <p className="text-[11px] text-muted-foreground">{row.label}</p>
                     <p className="font-medium text-foreground text-xs mt-0.5">{row.value}</p>
                   </div>
@@ -192,7 +195,7 @@ export default function TransactionsPage() {
                           >
                             {isCompleted ? "✓" : idx + 1}
                           </div>
-                          <span className={cn("text-[9px] mt-1 text-center w-12 leading-tight", isCurrent ? "text-primary font-semibold" : "text-muted-foreground")}>
+                          <span className={cn("text-[9px] mt-1 text-center w-10 md:w-12 leading-tight", isCurrent ? "text-primary font-semibold" : "text-muted-foreground")}>
                             {step}
                           </span>
                         </div>
@@ -218,14 +221,14 @@ export default function TransactionsPage() {
               </div>
 
               {/* Actions */}
-              <div className="flex gap-2 pt-1">
+              <div className="flex flex-col sm:flex-row gap-2 pt-1">
                 {currentStepIndex < statusOrder.length - 1 && (
-                  <Button size="sm" onClick={moveToNextStatus} className="flex items-center gap-1.5">
+                  <Button size="sm" onClick={moveToNextStatus} className="flex items-center justify-center gap-1.5 w-full sm:w-auto min-h-[44px] sm:min-h-0">
                     <ChevronRight className="w-3.5 h-3.5" />
                     Move to {statusOrder[currentStepIndex + 1]}
                   </Button>
                 )}
-                <Button size="sm" variant="outline" onClick={() => setSelectedTxn(null)}>
+                <Button size="sm" variant="outline" onClick={() => setSelectedTxn(null)} className="w-full sm:w-auto min-h-[44px] sm:min-h-0">
                   <X className="w-3.5 h-3.5 mr-1" /> Cancel
                 </Button>
               </div>

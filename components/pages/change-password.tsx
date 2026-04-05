@@ -108,7 +108,7 @@ export default function ChangePasswordPage({ adminProfile, onProfileUpdate }: Ch
   };
 
   return (
-    <div className="max-w-md space-y-6">
+    <div className="w-full max-w-md space-y-4 md:space-y-6">
 
       {/* ── Update Login Credentials ── */}
       <Card className="border border-border shadow-none">

@@ -30,7 +30,7 @@ function PricingSettings() {
   };
 
   return (
-    <div className="space-y-5 max-w-xl">
+    <div className="space-y-5 w-full max-w-xl">
       <Card className="border border-border shadow-none">
         <CardHeader className="pb-3">
           <CardTitle className="text-sm">Base Pricing</CardTitle>
@@ -96,7 +96,7 @@ function ServiceTypesSettings() {
   const [newService, setNewService] = useState("");
 
   return (
-    <div className="space-y-4 max-w-lg">
+    <div className="space-y-4 w-full max-w-lg">
       <Card className="border border-border shadow-none">
         <CardHeader className="pb-3">
           <CardTitle className="text-sm">Service Types</CardTitle>
@@ -135,7 +135,7 @@ function ServiceTypesSettings() {
 function BusinessProfileSettings() {
   const [saved, setSaved] = useState(false);
   return (
-    <div className="space-y-4 max-w-lg">
+    <div className="space-y-4 w-full max-w-lg">
       <Card className="border border-border shadow-none">
         <CardHeader className="pb-3">
           <CardTitle className="text-sm">Business Profile</CardTitle>
@@ -181,7 +181,7 @@ function BackupSettings() {
   const [schedule, setSchedule] = useState<"daily" | "weekly">("daily");
 
   return (
-    <div className="space-y-4 max-w-lg">
+    <div className="space-y-4 w-full max-w-lg">
       <Card className="border border-border shadow-none">
         <CardHeader className="pb-3">
           <CardTitle className="text-sm">Manual Backup</CardTitle>

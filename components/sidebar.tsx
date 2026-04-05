@@ -54,25 +54,30 @@ const settingsSubItems = [
 ];
 
 export default function Sidebar({ activePage, onNavigate }: SidebarProps) {
+  // On desktop: user can collapse to icon-only. On tablet (md): starts collapsed.
   const [collapsed, setCollapsed] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(activePage.startsWith("settings"));
 
   const isSettingsActive = activePage.startsWith("settings");
 
+  // On mobile the sidebar is shown as a full slide-in drawer (controlled by app-shell)
+  // On md (tablet) it starts icon-only; on lg it defaults to full
+  const effectiveCollapsed = collapsed;
+
   return (
     <aside
       className={cn(
         "flex flex-col h-screen bg-sidebar text-sidebar-foreground transition-all duration-300 shrink-0",
-        collapsed ? "w-16" : "w-60"
+        effectiveCollapsed ? "w-16" : "w-60"
       )}
     >
       {/* Logo */}
-      <div className="flex items-center gap-3 px-4 py-5 border-b border-sidebar-border">
+      <div className="flex items-center gap-3 px-4 py-5 border-b border-sidebar-border min-h-[60px]">
         <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-primary shrink-0">
           <WashingMachine className="w-5 h-5 text-white" />
         </div>
-        {!collapsed && (
-          <span className="font-semibold text-base tracking-tight text-white">
+        {!effectiveCollapsed && (
+          <span className="font-semibold text-base tracking-tight text-white truncate">
             LaundryTrack
           </span>
         )}
@@ -88,15 +93,16 @@ export default function Sidebar({ activePage, onNavigate }: SidebarProps) {
               <li key={item.id}>
                 <button
                   onClick={() => onNavigate(item.id)}
+                  title={effectiveCollapsed ? item.label : undefined}
                   className={cn(
-                    "w-full flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors",
+                    "w-full flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors min-h-[44px]",
                     active
                       ? "bg-sidebar-accent text-white"
                       : "text-sidebar-foreground/70 hover:bg-sidebar-accent/60 hover:text-white"
                   )}
                 >
-                  <Icon className="w-4.5 h-4.5 shrink-0" />
-                  {!collapsed && <span>{item.label}</span>}
+                  <Icon className="w-5 h-5 shrink-0" />
+                  {!effectiveCollapsed && <span className="truncate">{item.label}</span>}
                 </button>
               </li>
             );
@@ -106,29 +112,30 @@ export default function Sidebar({ activePage, onNavigate }: SidebarProps) {
           <li>
             <button
               onClick={() => {
-                if (!collapsed) setSettingsOpen((prev) => !prev);
+                if (!effectiveCollapsed) setSettingsOpen((prev) => !prev);
                 else onNavigate("settings-pricing");
               }}
+              title={effectiveCollapsed ? "Settings" : undefined}
               className={cn(
-                "w-full flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors",
+                "w-full flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors min-h-[44px]",
                 isSettingsActive
                   ? "bg-sidebar-accent text-white"
                   : "text-sidebar-foreground/70 hover:bg-sidebar-accent/60 hover:text-white"
               )}
             >
-              <Settings className="w-4.5 h-4.5 shrink-0" />
-              {!collapsed && (
+              <Settings className="w-5 h-5 shrink-0" />
+              {!effectiveCollapsed && (
                 <>
-                  <span className="flex-1 text-left">Settings</span>
+                  <span className="flex-1 text-left truncate">Settings</span>
                   {settingsOpen ? (
-                    <ChevronDown className="w-4 h-4" />
+                    <ChevronDown className="w-4 h-4 shrink-0" />
                   ) : (
-                    <ChevronRight className="w-4 h-4" />
+                    <ChevronRight className="w-4 h-4 shrink-0" />
                   )}
                 </>
               )}
             </button>
-            {!collapsed && settingsOpen && (
+            {!effectiveCollapsed && settingsOpen && (
               <ul className="mt-1 ml-3 pl-3 border-l border-sidebar-border space-y-1">
                 {settingsSubItems.map((sub) => {
                   const Icon = sub.icon;
@@ -138,14 +145,14 @@ export default function Sidebar({ activePage, onNavigate }: SidebarProps) {
                       <button
                         onClick={() => onNavigate(sub.id)}
                         className={cn(
-                          "w-full flex items-center gap-2.5 rounded-md px-2.5 py-2 text-xs font-medium transition-colors",
+                          "w-full flex items-center gap-2.5 rounded-md px-2.5 py-2 text-xs font-medium transition-colors min-h-[44px]",
                           active
                             ? "bg-primary/20 text-white"
                             : "text-sidebar-foreground/60 hover:bg-sidebar-accent/60 hover:text-white"
                         )}
                       >
                         <Icon className="w-3.5 h-3.5 shrink-0" />
-                        <span>{sub.label}</span>
+                        <span className="truncate">{sub.label}</span>
                       </button>
                     </li>
                   );
@@ -156,13 +163,13 @@ export default function Sidebar({ activePage, onNavigate }: SidebarProps) {
         </ul>
       </nav>
 
-      {/* Collapse toggle */}
-      <div className="p-3 border-t border-sidebar-border">
+      {/* Collapse toggle — desktop only */}
+      <div className="p-3 border-t border-sidebar-border hidden lg:block">
         <button
           onClick={() => setCollapsed((prev) => !prev)}
-          className="w-full flex items-center justify-center gap-2 rounded-md px-3 py-2 text-xs text-sidebar-foreground/50 hover:text-white hover:bg-sidebar-accent/60 transition-colors"
+          className="w-full flex items-center justify-center gap-2 rounded-md px-3 py-2 text-xs text-sidebar-foreground/50 hover:text-white hover:bg-sidebar-accent/60 transition-colors min-h-[44px]"
         >
-          {collapsed ? (
+          {effectiveCollapsed ? (
             <PanelLeftOpen className="w-4 h-4" />
           ) : (
             <>

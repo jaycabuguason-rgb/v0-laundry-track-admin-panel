@@ -28,11 +28,11 @@ export default function ProfilePage({ adminProfile }: ProfilePageProps) {
     .slice(0, 2);
 
   return (
-    <div className="max-w-2xl space-y-6">
+    <div className="w-full max-w-2xl space-y-4 md:space-y-6">
       {/* Avatar card */}
       <Card className="border border-border shadow-none">
         <CardContent className="pt-6 pb-5">
-          <div className="flex items-center gap-5">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 md:gap-5">
             <div className="relative shrink-0">
               <div className="w-20 h-20 rounded-full bg-primary flex items-center justify-center text-primary-foreground text-2xl font-semibold select-none">
                 {initials}
@@ -67,7 +67,7 @@ export default function ProfilePage({ adminProfile }: ProfilePageProps) {
             These values reflect your current login credentials. Update them from Settings → Change Password.
           </CardDescription>
         </CardHeader>
-        <CardContent className="grid grid-cols-2 gap-x-6 gap-y-4">
+        <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
           <InfoRow label="Full Name"     value={adminProfile.name} />
           <InfoRow label="Username"      value={adminProfile.username || "—"} />
           <InfoRow label="Email Address" value={adminProfile.email} />
@@ -83,7 +83,7 @@ export default function ProfilePage({ adminProfile }: ProfilePageProps) {
             These fields are managed by the system and cannot be changed here.
           </CardDescription>
         </CardHeader>
-        <CardContent className="grid grid-cols-2 gap-x-6 gap-y-4">
+        <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
           <InfoRow label="Role"      value="Admin" />
           <InfoRow label="Shop Name" value="LaundryTrack" />
         </CardContent>

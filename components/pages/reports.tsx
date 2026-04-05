@@ -105,23 +105,26 @@ export default function ReportsPage() {
 
   return (
     <Tabs defaultValue="daily" className="space-y-4">
-      <TabsList className="bg-muted/40 h-9">
-        {[
-          { value: "daily",     label: "Daily Summary" },
-          { value: "revenue",   label: "Revenue Report" },
-          { value: "unclaimed", label: "Unclaimed Items" },
-          { value: "peak",      label: "Peak Analysis" },
-          { value: "export",    label: "Export" },
-        ].map((t) => (
-          <TabsTrigger key={t.value} value={t.value} className="text-xs h-7 px-3">
-            {t.label}
-          </TabsTrigger>
-        ))}
-      </TabsList>
+      {/* Tabs scroll horizontally on small screens */}
+      <div className="overflow-x-auto pb-0.5">
+        <TabsList className="bg-muted/40 h-9 w-max min-w-full">
+          {[
+            { value: "daily",     label: "Daily Summary" },
+            { value: "revenue",   label: "Revenue Report" },
+            { value: "unclaimed", label: "Unclaimed Items" },
+            { value: "peak",      label: "Peak Analysis" },
+            { value: "export",    label: "Export" },
+          ].map((t) => (
+            <TabsTrigger key={t.value} value={t.value} className="text-xs h-7 px-3 whitespace-nowrap">
+              {t.label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </div>
 
       {/* ── Daily Summary ──────────────────────────────────────────────────── */}
       <TabsContent value="daily" className="space-y-4">
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
           {summaryCards.map((c) => (
             <Card key={c.label} className="border border-border shadow-none">
               <CardContent className="p-5">
@@ -141,7 +144,7 @@ export default function ReportsPage() {
           </CardHeader>
           <CardContent className="p-0">
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full text-sm min-w-[540px]">
                 <thead>
                   <tr className="border-y border-border bg-muted/40">
                     {["Ticket ID", "Customer", "Arrival Date & Time", "Type", "Weight", "Fee", "Status"].map((h) => (
