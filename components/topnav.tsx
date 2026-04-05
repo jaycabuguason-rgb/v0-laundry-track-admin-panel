@@ -1,7 +1,9 @@
 "use client";
 
-import { Bell, ChevronDown, User } from "lucide-react";
+import { useState } from "react";
+import { Bell, ChevronDown, User, Eye, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -9,6 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { initialNotifications, type Notification } from "@/lib/data";
 import { type Page } from "@/components/sidebar";
 
 const pageTitles: Record<Page, string> = {
@@ -23,11 +26,38 @@ const pageTitles: Record<Page, string> = {
   loyalty: "Loyalty Members",
 };
 
+const notifTypeColors: Record<Notification["type"], string> = {
+  ready:     "bg-green-100 text-green-700",
+  claim:     "bg-blue-100 text-blue-700",
+  unclaimed: "bg-orange-100 text-orange-700",
+  override:  "bg-red-100 text-red-700",
+};
+
 interface TopNavProps {
   activePage: Page;
+  onNavigate: (page: Page) => void;
 }
 
-export default function TopNav({ activePage }: TopNavProps) {
+export default function TopNav({ activePage, onNavigate }: TopNavProps) {
+  const [notifications, setNotifications] = useState<Notification[]>(initialNotifications);
+  const [notifOpen, setNotifOpen] = useState(false);
+
+  const dismiss = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setNotifications((prev) => prev.filter((n) => n.id !== id));
+  };
+
+  const viewNotif = (notif: Notification, e: React.MouseEvent) => {
+    e.stopPropagation();
+    // Navigate to the relevant page without closing the dropdown
+    if (notif.type === "ready" || notif.type === "unclaimed") {
+      onNavigate("transactions");
+    } else if (notif.type === "claim" || notif.type === "override") {
+      onNavigate("claim-verification");
+    }
+    setNotifOpen(false);
+  };
+
   return (
     <header className="h-14 bg-card border-b border-border flex items-center justify-between px-6 shrink-0">
       <h1 className="text-sm font-semibold text-foreground">
@@ -36,19 +66,76 @@ export default function TopNav({ activePage }: TopNavProps) {
 
       <div className="flex items-center gap-3">
         {/* Notifications */}
-        <button className="relative p-2 rounded-md cursor-pointer hover:bg-accent transition-colors active:scale-95">
-          <Bell className="w-4.5 h-4.5 text-muted-foreground" />
-          <Badge className="absolute -top-0.5 -right-0.5 h-4 w-4 p-0 flex items-center justify-center text-[10px] bg-primary text-white border-0">
-            3
-          </Badge>
-        </button>
+        <DropdownMenu open={notifOpen} onOpenChange={setNotifOpen}>
+          <DropdownMenuTrigger asChild>
+            <button className="relative p-2 rounded-md cursor-pointer hover:bg-accent transition-colors active:scale-95">
+              <Bell className="w-4 h-4 text-muted-foreground" />
+              {notifications.length > 0 && (
+                <Badge className="absolute -top-0.5 -right-0.5 h-4 w-4 p-0 flex items-center justify-center text-[10px] bg-primary text-primary-foreground border-0">
+                  {notifications.length}
+                </Badge>
+              )}
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            align="end"
+            className="w-80 p-0"
+            onCloseAutoFocus={(e) => e.preventDefault()}
+          >
+            <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+              <p className="text-xs font-semibold text-foreground">Notifications</p>
+              <span className="text-[11px] text-muted-foreground">{notifications.length} unread</span>
+            </div>
+
+            {notifications.length === 0 ? (
+              <div className="py-8 text-center text-xs text-muted-foreground">
+                No notifications
+              </div>
+            ) : (
+              <div className="max-h-80 overflow-y-auto">
+                {notifications.map((notif) => (
+                  <div
+                    key={notif.id}
+                    className="flex items-start gap-3 px-4 py-3 border-b border-border last:border-0 hover:bg-muted/30 transition-colors"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold mb-1 ${notifTypeColors[notif.type]}`}>
+                        {notif.type.toUpperCase()}
+                      </span>
+                      <p className="text-xs text-foreground leading-snug">{notif.message}</p>
+                      <p className="text-[11px] text-muted-foreground mt-0.5">{notif.time}</p>
+                    </div>
+                    <div className="flex flex-col gap-1 shrink-0">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-6 text-[11px] px-2 flex items-center gap-1"
+                        onClick={(e) => viewNotif(notif, e)}
+                      >
+                        <Eye className="w-3 h-3" /> View
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-6 text-[11px] px-2 flex items-center gap-1 text-muted-foreground hover:text-destructive"
+                        onClick={(e) => dismiss(notif.id, e)}
+                      >
+                        <X className="w-3 h-3" /> Dismiss
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
 
         {/* Admin profile */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button className="flex items-center gap-2 rounded-md px-2.5 py-1.5 cursor-pointer hover:bg-accent transition-colors active:scale-95">
               <div className="w-7 h-7 rounded-full bg-primary flex items-center justify-center shrink-0">
-                <User className="w-4 h-4 text-white" />
+                <User className="w-4 h-4 text-primary-foreground" />
               </div>
               <div className="text-left hidden sm:block">
                 <p className="text-xs font-semibold text-foreground leading-none">Admin</p>

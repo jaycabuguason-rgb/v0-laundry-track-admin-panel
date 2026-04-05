@@ -135,12 +135,13 @@ export default function ClaimVerificationPage() {
               <div className="rounded-lg border border-border p-4 space-y-3">
                 <div className="grid grid-cols-2 gap-2 text-sm">
                   {[
-                    { label: "Customer", value: result.customerName },
-                    { label: "Ticket ID", value: result.ticketId },
-                    { label: "Drop-off", value: result.dropOffDate },
-                    { label: "Wash Type", value: result.washType },
+                    { label: "Customer",            value: result.customerName,      span: false },
+                    { label: "Ticket ID",           value: result.ticketId,          span: false },
+                    { label: "Arrival Date & Time", value: result.arrivalDateTime,   span: true  },
+                    { label: "Wash Type",           value: result.washType,          span: false },
+                    { label: "Drop-off Date",       value: result.dropOffDate,       span: false },
                   ].map((r) => (
-                    <div key={r.label} className="bg-muted/30 rounded p-2.5">
+                    <div key={r.label} className={`bg-muted/30 rounded p-2.5${r.span ? " col-span-2" : ""}`}>
                       <p className="text-[11px] text-muted-foreground">{r.label}</p>
                       <p className="font-medium text-xs text-foreground mt-0.5">{r.value}</p>
                     </div>

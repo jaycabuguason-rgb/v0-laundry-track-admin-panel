@@ -6,35 +6,107 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
-  BarChart, Bar, LineChart, Line, XAxis, YAxis,
-  CartesianGrid, Tooltip, ResponsiveContainer, Legend,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  BarChart, Bar, XAxis, YAxis,
+  CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
 import {
-  weeklyRevenueData, peakHoursData, busyDayData, serviceRevenueData, transactions,
+  weeklyRevenueData, serviceRevenueData, transactions,
+  peakByHour, peakByDayOfWeek, peakByWeekOfMonth, peakByMonth, peakBySeason, peakByYear,
 } from "@/lib/data";
+import { cn } from "@/lib/utils";
 
 const unclaimedItems = transactions.filter((t) => t.status === "Ready");
 
 const summaryCards = [
-  { label: "Total Transactions", value: transactions.length, sub: "All time" },
-  { label: "Total kg Processed", value: `${transactions.reduce((s, t) => s + t.weight, 0).toFixed(1)} kg`, sub: "All time" },
-  { label: "Total Revenue", value: `₱${transactions.reduce((s, t) => s + t.fee, 0).toLocaleString()}`, sub: "All time" },
-  { label: "Unclaimed Count", value: unclaimedItems.length, sub: "Currently waiting" },
+  { label: "Total Transactions", value: transactions.length,                                                                          sub: "All time" },
+  { label: "Total kg Processed", value: `${transactions.reduce((s, t) => s + t.weight, 0).toFixed(1)} kg`,                           sub: "All time" },
+  { label: "Total Revenue",      value: `₱${transactions.reduce((s, t) => s + t.fee, 0).toLocaleString()}`,                          sub: "All time" },
+  { label: "Unclaimed Count",    value: unclaimedItems.length,                                                                        sub: "Currently waiting" },
+];
+
+// ── Peak period options ──────────────────────────────────────────────────────
+type PeakPeriod = "hour" | "day" | "week" | "month" | "season" | "year";
+
+const peakOptions: { value: PeakPeriod; label: string }[] = [
+  { value: "hour",   label: "Hour of Day" },
+  { value: "day",    label: "Day of Week" },
+  { value: "week",   label: "Week of Month" },
+  { value: "month",  label: "Month of Year" },
+  { value: "season", label: "Season" },
+  { value: "year",   label: "Yearly" },
+];
+
+const peakDataMap: Record<PeakPeriod, { label: string; count: number }[]> = {
+  hour:   peakByHour,
+  day:    peakByDayOfWeek,
+  week:   peakByWeekOfMonth,
+  month:  peakByMonth,
+  season: peakBySeason,
+  year:   peakByYear,
+};
+
+const peakAxisLabel: Record<PeakPeriod, string> = {
+  hour:   "Hour",
+  day:    "Day",
+  week:   "Week",
+  month:  "Month",
+  season: "Season",
+  year:   "Year",
+};
+
+// ── Export options ────────────────────────────────────────────────────────────
+const exportOptions = [
+  { id: "transactions", label: "Transactions" },
+  { id: "analytics",   label: "Analytics / Revenue Report" },
+  { id: "customers",   label: "Customer List (Loyalty Members)" },
 ];
 
 export default function ReportsPage() {
   const [revenueRange, setRevenueRange] = useState<"day" | "week" | "month">("week");
 
+  // Peak
+  const [peakPeriod, setPeakPeriod] = useState<PeakPeriod>("hour");
+  const peakData    = peakDataMap[peakPeriod];
+  const busiest     = peakData.reduce((max, d) => d.count > max.count ? d : max, peakData[0]);
+  const periodLabel = peakOptions.find((o) => o.value === peakPeriod)?.label ?? "";
+
+  // Export
+  const [selectedExports, setSelectedExports] = useState<string[]>([]);
+  const [exportFrom, setExportFrom]   = useState("2026-04-01");
+  const [exportTo, setExportTo]       = useState("2026-04-05");
+  const [exportFormat, setExportFormat] = useState<"pdf" | "csv">("pdf");
+
+  const allSelected  = selectedExports.length === exportOptions.length;
+  const someSelected = selectedExports.length > 0 && !allSelected;
+
+  const toggleExport = (id: string) => {
+    setSelectedExports((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
+
+  const toggleAll = () => {
+    setSelectedExports(allSelected ? [] : exportOptions.map((o) => o.id));
+  };
+
   return (
     <Tabs defaultValue="daily" className="space-y-4">
       <TabsList className="bg-muted/40 h-9">
         {[
-          { value: "daily", label: "Daily Summary" },
-          { value: "revenue", label: "Revenue Report" },
+          { value: "daily",     label: "Daily Summary" },
+          { value: "revenue",   label: "Revenue Report" },
           { value: "unclaimed", label: "Unclaimed Items" },
-          { value: "peak", label: "Peak Hours" },
-          { value: "export", label: "Export" },
+          { value: "peak",      label: "Peak Analysis" },
+          { value: "export",    label: "Export" },
         ].map((t) => (
           <TabsTrigger key={t.value} value={t.value} className="text-xs h-7 px-3">
             {t.label}
@@ -42,7 +114,7 @@ export default function ReportsPage() {
         ))}
       </TabsList>
 
-      {/* Daily Summary */}
+      {/* ── Daily Summary ──────────────────────────────────────────────────── */}
       <TabsContent value="daily" className="space-y-4">
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {summaryCards.map((c) => (
@@ -63,34 +135,37 @@ export default function ReportsPage() {
             </div>
           </CardHeader>
           <CardContent className="p-0">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-y border-border bg-muted/40">
-                  {["Ticket ID", "Customer", "Type", "Weight", "Fee", "Status"].map((h) => (
-                    <th key={h} className="text-left text-xs font-medium text-muted-foreground px-4 py-2.5">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {transactions.filter((t) => t.dropOffDate === "2026-04-05").map((t) => (
-                  <tr key={t.id} className="border-b border-border last:border-0 hover:bg-muted/20">
-                    <td className="px-4 py-2.5 text-xs font-mono text-primary">{t.ticketId}</td>
-                    <td className="px-4 py-2.5 text-xs font-medium text-foreground">{t.customerName}</td>
-                    <td className="px-4 py-2.5 text-xs text-muted-foreground">{t.washType}</td>
-                    <td className="px-4 py-2.5 text-xs text-muted-foreground">{t.weight} kg</td>
-                    <td className="px-4 py-2.5 text-xs font-medium">₱{t.fee}</td>
-                    <td className="px-4 py-2.5">
-                      <span className="px-2 py-0.5 rounded-full text-[11px] font-medium bg-blue-100 text-blue-700">{t.status}</span>
-                    </td>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-y border-border bg-muted/40">
+                    {["Ticket ID", "Customer", "Arrival Date & Time", "Type", "Weight", "Fee", "Status"].map((h) => (
+                      <th key={h} className="text-left text-xs font-medium text-muted-foreground px-4 py-2.5 whitespace-nowrap">{h}</th>
+                    ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {transactions.filter((t) => t.dropOffDate === "2026-04-05").map((t) => (
+                    <tr key={t.id} className="border-b border-border last:border-0 hover:bg-muted/20">
+                      <td className="px-4 py-2.5 text-xs font-mono text-primary">{t.ticketId}</td>
+                      <td className="px-4 py-2.5 text-xs font-medium text-foreground">{t.customerName}</td>
+                      <td className="px-4 py-2.5 text-xs text-muted-foreground whitespace-nowrap">{t.arrivalDateTime}</td>
+                      <td className="px-4 py-2.5 text-xs text-muted-foreground">{t.washType}</td>
+                      <td className="px-4 py-2.5 text-xs text-muted-foreground">{t.weight} kg</td>
+                      <td className="px-4 py-2.5 text-xs font-medium">₱{t.fee}</td>
+                      <td className="px-4 py-2.5">
+                        <span className="px-2 py-0.5 rounded-full text-[11px] font-medium bg-blue-100 text-blue-700">{t.status}</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </CardContent>
         </Card>
       </TabsContent>
 
-      {/* Revenue Report */}
+      {/* ── Revenue Report ─────────────────────────────────────────────────── */}
       <TabsContent value="revenue" className="space-y-4">
         <Card className="border border-border shadow-none">
           <CardHeader className="pb-3">
@@ -118,7 +193,7 @@ export default function ReportsPage() {
                 <XAxis dataKey="day" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
                 <YAxis tick={{ fontSize: 11 }} tickLine={false} axisLine={false} tickFormatter={(v) => `₱${v}`} />
                 <Tooltip formatter={(v: number) => [`₱${v}`, "Revenue"]} contentStyle={{ fontSize: 12, borderRadius: 6 }} />
-                <Bar dataKey="revenue" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="revenue" fill="var(--primary)" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
@@ -151,126 +226,197 @@ export default function ReportsPage() {
         </Card>
       </TabsContent>
 
-      {/* Unclaimed Items */}
+      {/* ── Unclaimed Items ─────────────────────────────────────────────────── */}
       <TabsContent value="unclaimed">
         <Card className="border border-border shadow-none">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-semibold">Unclaimed Items ({unclaimedItems.length})</CardTitle>
           </CardHeader>
           <CardContent className="p-0">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-y border-border bg-muted/40">
-                  {["Ticket ID", "Customer Name", "Contact", "Drop-off Date", "Days Waiting", "Action"].map((h) => (
-                    <th key={h} className="text-left text-xs font-medium text-muted-foreground px-4 py-2.5">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {unclaimedItems.map((t) => {
-                  const daysWaiting = Math.floor((new Date("2026-04-05").getTime() - new Date(t.dropOffDate).getTime()) / 86400000);
-                  return (
-                    <tr key={t.id} className="border-b border-border last:border-0 hover:bg-muted/20">
-                      <td className="px-4 py-3 text-xs font-mono text-primary">{t.ticketId}</td>
-                      <td className="px-4 py-3 text-xs font-medium text-foreground">{t.customerName}</td>
-                      <td className="px-4 py-3 text-xs text-muted-foreground">{t.phone}</td>
-                      <td className="px-4 py-3 text-xs text-muted-foreground">{t.dropOffDate}</td>
-                      <td className="px-4 py-3">
-                        <span className={`text-xs font-medium ${daysWaiting > 1 ? "text-orange-600" : "text-muted-foreground"}`}>
-                          {daysWaiting} day{daysWaiting !== 1 ? "s" : ""}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <Button size="sm" variant="outline" className="h-7 text-xs flex items-center gap-1">
-                          <Phone className="w-3 h-3" /> Contact
-                        </Button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-y border-border bg-muted/40">
+                    {["Ticket ID", "Customer Name", "Contact", "Arrival Date & Time", "Days Waiting", "Action"].map((h) => (
+                      <th key={h} className="text-left text-xs font-medium text-muted-foreground px-4 py-2.5 whitespace-nowrap">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {unclaimedItems.map((t) => {
+                    const daysWaiting = Math.floor((new Date("2026-04-05").getTime() - new Date(t.dropOffDate).getTime()) / 86400000);
+                    return (
+                      <tr key={t.id} className="border-b border-border last:border-0 hover:bg-muted/20">
+                        <td className="px-4 py-3 text-xs font-mono text-primary">{t.ticketId}</td>
+                        <td className="px-4 py-3 text-xs font-medium text-foreground">{t.customerName}</td>
+                        <td className="px-4 py-3 text-xs text-muted-foreground">{t.phone}</td>
+                        <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">{t.arrivalDateTime}</td>
+                        <td className="px-4 py-3">
+                          <span className={cn("text-xs font-medium", daysWaiting > 1 ? "text-orange-600" : "text-muted-foreground")}>
+                            {daysWaiting} day{daysWaiting !== 1 ? "s" : ""}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <Button size="sm" variant="outline" className="h-7 text-xs flex items-center gap-1">
+                            <Phone className="w-3 h-3" /> Contact
+                          </Button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </CardContent>
         </Card>
       </TabsContent>
 
-      {/* Peak Hours */}
+      {/* ── Peak Analysis ──────────────────────────────────────────────────── */}
       <TabsContent value="peak" className="space-y-4">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <Card className="border border-border shadow-none">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-semibold">Transactions per Hour</CardTitle>
-            </CardHeader>
-            <CardContent className="pb-4">
-              <ResponsiveContainer width="100%" height={200}>
-                <BarChart data={peakHoursData} barSize={16}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
-                  <XAxis dataKey="hour" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} />
-                  <YAxis tick={{ fontSize: 10 }} tickLine={false} axisLine={false} width={20} />
-                  <Tooltip contentStyle={{ fontSize: 11, borderRadius: 6 }} />
-                  <Bar dataKey="count" fill="#3b82f6" radius={[3, 3, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-          <Card className="border border-border shadow-none">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-semibold">Busiest Day of Week</CardTitle>
-            </CardHeader>
-            <CardContent className="pb-4">
-              <ResponsiveContainer width="100%" height={200}>
-                <BarChart data={busyDayData} barSize={24}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
-                  <XAxis dataKey="day" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} />
-                  <YAxis tick={{ fontSize: 10 }} tickLine={false} axisLine={false} width={20} />
-                  <Tooltip contentStyle={{ fontSize: 11, borderRadius: 6 }} />
-                  <Bar dataKey="count" fill="#60a5fa" radius={[3, 3, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-        </div>
+        <Card className="border border-border shadow-none">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <CardTitle className="text-sm font-semibold">Peak Analysis</CardTitle>
+              <Select value={peakPeriod} onValueChange={(v) => setPeakPeriod(v as PeakPeriod)}>
+                <SelectTrigger className="w-44 h-8 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {peakOptions.map((o) => (
+                    <SelectItem key={o.value} value={o.value} className="text-xs">
+                      {o.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </CardHeader>
+          <CardContent className="pb-4 space-y-4">
+            <ResponsiveContainer width="100%" height={240}>
+              <BarChart data={peakData} barSize={peakData.length > 12 ? 12 : 24}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+                <XAxis
+                  dataKey="label"
+                  tick={{ fontSize: peakData.length > 12 ? 9 : 11 }}
+                  tickLine={false}
+                  axisLine={false}
+                  interval={0}
+                  angle={peakData.length > 12 ? -35 : 0}
+                  textAnchor={peakData.length > 12 ? "end" : "middle"}
+                  height={peakData.length > 12 ? 40 : 24}
+                />
+                <YAxis tick={{ fontSize: 11 }} tickLine={false} axisLine={false} width={28} />
+                <Tooltip
+                  formatter={(v: number) => [v, "Transactions"]}
+                  labelFormatter={(l) => `${peakAxisLabel[peakPeriod]}: ${l}`}
+                  contentStyle={{ fontSize: 12, borderRadius: 6 }}
+                />
+                <Bar dataKey="count" fill="var(--primary)" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+            <p className="text-xs text-muted-foreground bg-muted/40 rounded-md px-4 py-2.5">
+              Busiest {peakAxisLabel[peakPeriod].toLowerCase()}:{" "}
+              <span className="font-semibold text-foreground">{busiest.label}</span>{" "}
+              with{" "}
+              <span className="font-semibold text-foreground">{busiest.count}</span> transactions
+            </p>
+          </CardContent>
+        </Card>
       </TabsContent>
 
-      {/* Export */}
+      {/* ── Export ─────────────────────────────────────────────────────────── */}
       <TabsContent value="export">
-        <Card className="border border-border shadow-none max-w-md">
+        <Card className="border border-border shadow-none max-w-lg">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-semibold">Export Reports</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-5">
+            {/* What to export */}
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-foreground">Select Data to Export</p>
+              <div className="rounded-md border border-border p-3 space-y-3">
+                {/* Select All */}
+                <label className="flex items-center gap-2.5 cursor-pointer">
+                  <Checkbox
+                    checked={allSelected}
+                    data-state={someSelected ? "indeterminate" : allSelected ? "checked" : "unchecked"}
+                    onCheckedChange={toggleAll}
+                    className="shrink-0"
+                  />
+                  <span className="text-xs font-semibold text-foreground">Select All</span>
+                </label>
+                <div className="h-px bg-border" />
+                {exportOptions.map((opt) => (
+                  <label key={opt.id} className="flex items-center gap-2.5 cursor-pointer">
+                    <Checkbox
+                      checked={selectedExports.includes(opt.id)}
+                      onCheckedChange={() => toggleExport(opt.id)}
+                      className="shrink-0"
+                    />
+                    <span className="text-xs text-foreground">{opt.label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* Date range */}
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-xs font-medium text-foreground block mb-1">From Date</label>
-                <Input type="date" defaultValue="2026-04-01" className="h-9 text-sm" />
+                <label className="text-xs font-medium text-foreground block mb-1">Start Date</label>
+                <Input
+                  type="date"
+                  value={exportFrom}
+                  onChange={(e) => setExportFrom(e.target.value)}
+                  className="h-9 text-sm"
+                />
               </div>
               <div>
-                <label className="text-xs font-medium text-foreground block mb-1">To Date</label>
-                <Input type="date" defaultValue="2026-04-05" className="h-9 text-sm" />
+                <label className="text-xs font-medium text-foreground block mb-1">End Date</label>
+                <Input
+                  type="date"
+                  value={exportTo}
+                  onChange={(e) => setExportTo(e.target.value)}
+                  className="h-9 text-sm"
+                />
               </div>
             </div>
+
+            {/* Format selector */}
             <div className="space-y-2">
-              <label className="text-xs font-medium text-foreground block">Report Type</label>
-              <select className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
-                <option>All Transactions</option>
-                <option>Revenue Report</option>
-                <option>Unclaimed Items</option>
-                <option>Loyalty Report</option>
-              </select>
+              <p className="text-xs font-medium text-foreground">Format</p>
+              <div className="flex gap-4">
+                {(["pdf", "csv"] as const).map((fmt) => (
+                  <label key={fmt} className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="exportFormat"
+                      value={fmt}
+                      checked={exportFormat === fmt}
+                      onChange={() => setExportFormat(fmt)}
+                      className="accent-primary"
+                    />
+                    <span className="text-xs text-foreground uppercase font-medium">{fmt}</span>
+                  </label>
+                ))}
+              </div>
             </div>
-            <div className="flex gap-3 pt-1">
-              <Button size="sm" className="flex items-center gap-1.5">
-                <FileText className="w-3.5 h-3.5" /> Export as PDF
-              </Button>
-              <Button size="sm" variant="outline" className="flex items-center gap-1.5">
-                <Download className="w-3.5 h-3.5" /> Export as CSV
-              </Button>
-            </div>
+
+            {/* Export button */}
+            <Button
+              size="sm"
+              disabled={selectedExports.length === 0}
+              className="flex items-center gap-1.5 w-full"
+            >
+              {exportFormat === "pdf"
+                ? <FileText className="w-3.5 h-3.5" />
+                : <Download className="w-3.5 h-3.5" />
+              }
+              Export as {exportFormat.toUpperCase()}
+              {selectedExports.length > 0 && ` (${selectedExports.length} selected)`}
+            </Button>
           </CardContent>
         </Card>
       </TabsContent>
     </Tabs>
   );
 }
-
-

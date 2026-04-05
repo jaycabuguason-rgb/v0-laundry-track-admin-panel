@@ -89,7 +89,7 @@ export default function TransactionsPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border bg-muted/40">
-                {["Ticket ID", "Customer Name", "Drop-off Date", "Weight (kg)", "Wash Type", "Fee", "Status", "Actions"].map((h) => (
+                {["Ticket ID", "Customer Name", "Arrival Date & Time", "Weight (kg)", "Wash Type", "Fee", "Status", "Actions"].map((h) => (
                   <th key={h} className="text-left text-xs font-medium text-muted-foreground px-4 py-3 whitespace-nowrap">
                     {h}
                   </th>
@@ -101,7 +101,7 @@ export default function TransactionsPage() {
                 <tr key={txn.id} className="border-b border-border last:border-0 hover:bg-muted/20 transition-colors">
                   <td className="px-4 py-3 text-xs font-mono font-semibold text-primary">{txn.ticketId}</td>
                   <td className="px-4 py-3 text-xs font-medium text-foreground">{txn.customerName}</td>
-                  <td className="px-4 py-3 text-xs text-muted-foreground">{txn.dropOffDate}</td>
+                  <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">{txn.arrivalDateTime}</td>
                   <td className="px-4 py-3 text-xs text-muted-foreground">{txn.weight} kg</td>
                   <td className="px-4 py-3 text-xs text-muted-foreground">{txn.washType}</td>
                   <td className="px-4 py-3 text-xs font-medium text-foreground">₱{txn.fee}</td>
@@ -144,9 +144,7 @@ export default function TransactionsPage() {
       <Dialog open={!!selectedTxn} onOpenChange={(open) => !open && setSelectedTxn(null)}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle className="flex items-center justify-between">
-              <span>Ticket Details — {selectedTxn?.ticketId}</span>
-            </DialogTitle>
+            <DialogTitle>Ticket Details — {selectedTxn?.ticketId}</DialogTitle>
             <DialogDescription>
               View and update the status, wash instructions, and details for this transaction.
             </DialogDescription>
@@ -157,15 +155,15 @@ export default function TransactionsPage() {
               {/* Details */}
               <div className="grid grid-cols-2 gap-3 text-sm">
                 {[
-                  { label: "Customer", value: selectedTxn.customerName },
-                  { label: "Phone", value: selectedTxn.phone },
-                  { label: "Drop-off Date", value: selectedTxn.dropOffDate },
-                  { label: "Wash Type", value: selectedTxn.washType },
-                  { label: "Weight", value: `${selectedTxn.weight} kg` },
-                  { label: "Fee", value: `₱${selectedTxn.fee}` },
-                  { label: "Add-ons", value: selectedTxn.addOns.length ? selectedTxn.addOns.join(", ") : "None" },
+                  { label: "Customer",           value: selectedTxn.customerName },
+                  { label: "Phone",              value: selectedTxn.phone },
+                  { label: "Arrival Date & Time", value: selectedTxn.arrivalDateTime },
+                  { label: "Wash Type",          value: selectedTxn.washType },
+                  { label: "Weight",             value: `${selectedTxn.weight} kg` },
+                  { label: "Fee",                value: `₱${selectedTxn.fee}` },
+                  { label: "Add-ons",            value: selectedTxn.addOns.length ? selectedTxn.addOns.join(", ") : "None" },
                 ].map((row) => (
-                  <div key={row.label} className="bg-muted/30 rounded-md p-3">
+                  <div key={row.label} className={cn("bg-muted/30 rounded-md p-3", row.label === "Arrival Date & Time" && "col-span-2")}>
                     <p className="text-[11px] text-muted-foreground">{row.label}</p>
                     <p className="font-medium text-foreground text-xs mt-0.5">{row.value}</p>
                   </div>
@@ -187,10 +185,8 @@ export default function TransactionsPage() {
                           <div
                             className={cn(
                               "w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold border-2 transition-colors",
-                              isCompleted
-                                ? "bg-primary border-primary text-white"
-                                : isCurrent
-                                ? "bg-primary border-primary text-white"
+                              isCompleted || isCurrent
+                                ? "bg-primary border-primary text-primary-foreground"
                                 : "bg-background border-border text-muted-foreground"
                             )}
                           >
