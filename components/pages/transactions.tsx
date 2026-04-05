@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -146,6 +147,9 @@ export default function TransactionsPage() {
             <DialogTitle className="flex items-center justify-between">
               <span>Ticket Details — {selectedTxn?.ticketId}</span>
             </DialogTitle>
+            <DialogDescription>
+              View and update the status, wash instructions, and details for this transaction.
+            </DialogDescription>
           </DialogHeader>
 
           {selectedTxn && (
