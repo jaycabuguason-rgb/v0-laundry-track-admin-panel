@@ -77,23 +77,14 @@ export default function ChangePasswordPage({ adminProfile, onProfileUpdate }: Ch
   // --- Update Login Credentials state ---
   const [credCurrentEmail, setCredCurrentEmail] = useState(adminProfile.email);
   const [newEmail, setNewEmail]                 = useState("");
-  const [newUsername, setNewUsername]           = useState("");
-  const [credPassword, setCredPassword]         = useState("");
   const [credSuccess, setCredSuccess]           = useState(false);
 
-  const credCanSave = credPassword.trim().length > 0;
-
   const handleCredSave = () => {
-    if (!credCanSave) return;
     const updates: Partial<AdminProfile> = {};
-    if (newEmail.trim())    updates.email    = newEmail.trim();
-    if (newUsername.trim()) updates.name     = newUsername.trim();
+    if (newEmail.trim()) updates.email = newEmail.trim();
     onProfileUpdate(updates);
-    // Reflect new email in current email field
     setCredCurrentEmail(newEmail.trim() || adminProfile.email);
     setNewEmail("");
-    setNewUsername("");
-    setCredPassword("");
     setCredSuccess(true);
     setTimeout(() => setCredSuccess(false), 4000);
   };
@@ -154,36 +145,6 @@ export default function ChangePasswordPage({ adminProfile, onProfileUpdate }: Ch
               className="h-9 text-sm"
             />
           </div>
-
-          <div>
-            <Label htmlFor="cred-new-username" className="text-xs font-medium mb-1.5 block">
-              New Username <span className="text-muted-foreground font-normal">(optional)</span>
-            </Label>
-            <Input
-              id="cred-new-username"
-              type="text"
-              value={newUsername}
-              onChange={(e) => { setNewUsername(e.target.value); setCredSuccess(false); }}
-              placeholder="Enter new username"
-              className="h-9 text-sm"
-            />
-          </div>
-
-          <PasswordInput
-            id="cred-password"
-            label="Current Password (required to confirm changes)"
-            value={credPassword}
-            onChange={(v) => { setCredPassword(v); setCredSuccess(false); }}
-            placeholder="Enter current password to confirm"
-          />
-
-          <Button
-            className="w-full cursor-pointer"
-            disabled={!credCanSave}
-            onClick={handleCredSave}
-          >
-            Save Changes
-          </Button>
 
           {credSuccess && (
             <p className="text-xs text-green-600 font-medium flex items-center gap-1.5">
