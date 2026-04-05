@@ -1,7 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { Search, Eye, Edit, Ban, Printer, ChevronRight, X } from "lucide-react";
+import { Search, Eye, Edit, Ban, Printer, ChevronRight, X, QrCode, CalendarIcon } from "lucide-react";
+import { QRCodeSVG } from "qrcode.react";
+import { format } from "date-fns";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -26,15 +30,18 @@ export default function TransactionsPage() {
   const [txns, setTxns] = useState(initialTxns);
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
+  const [filterDate, setFilterDate] = useState<Date | undefined>(undefined);
   const [selectedTxn, setSelectedTxn] = useState<Transaction | null>(null);
   const [instructions, setInstructions] = useState("");
+  const [reprintTxn, setReprintTxn] = useState<Transaction | null>(null);
 
   const filtered = txns.filter((t) => {
     const matchSearch =
       t.customerName.toLowerCase().includes(search.toLowerCase()) ||
       t.ticketId.toLowerCase().includes(search.toLowerCase());
     const matchStatus = filterStatus === "all" || t.status === filterStatus;
-    return matchSearch && matchStatus;
+    const matchDate = !filterDate || t.dropOffDate === format(filterDate, "yyyy-MM-dd");
+    return matchSearch && matchStatus && matchDate;
   });
 
   const currentStepIndex = selectedTxn ? statusOrder.indexOf(selectedTxn.status) : 0;
@@ -80,7 +87,29 @@ export default function TransactionsPage() {
             ))}
           </SelectContent>
         </Select>
-        <Input type="date" defaultValue="2026-04-05" className="w-full sm:w-40 h-10 md:h-9 text-sm" />
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="outline" className="w-full sm:w-44 h-10 md:h-9 text-sm justify-start gap-2 font-normal">
+              <CalendarIcon className="w-4 h-4 text-muted-foreground shrink-0" />
+              {filterDate ? format(filterDate, "MMM d, yyyy") : "All dates"}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="start">
+            <Calendar
+              mode="single"
+              selected={filterDate}
+              onSelect={(d) => setFilterDate(d ?? undefined)}
+              initialFocus
+            />
+            {filterDate && (
+              <div className="p-2 border-t border-border">
+                <Button variant="ghost" size="sm" className="w-full text-xs h-7" onClick={() => setFilterDate(undefined)}>
+                  Clear date filter
+                </Button>
+              </div>
+            )}
+          </PopoverContent>
+        </Popover>
       </div>
 
       {/* Table — horizontally scrollable */}
@@ -124,7 +153,7 @@ export default function TransactionsPage() {
                       <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" title="Void">
                         <Ban className="w-3.5 h-3.5" />
                       </Button>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 hidden sm:flex" title="Reprint">
+                      <Button variant="ghost" size="icon" className="h-8 w-8 hidden sm:flex" title="Reprint" onClick={() => setReprintTxn(txn)}>
                         <Printer className="w-3.5 h-3.5" />
                       </Button>
                     </div>
@@ -208,6 +237,17 @@ export default function TransactionsPage() {
                 </div>
               </div>
 
+              {/* QR Code */}
+              <div className="flex flex-col items-center gap-2 py-2 bg-muted/30 rounded-lg">
+                <QRCodeSVG
+                  value={`https://laundrytrack.ph/ticket/${selectedTxn.ticketId}`}
+                  size={100}
+                  level="M"
+                  includeMargin
+                />
+                <p className="text-[10px] text-muted-foreground font-mono">{selectedTxn.ticketId}</p>
+              </div>
+
               {/* Wash instructions */}
               <div>
                 <label className="text-xs font-medium text-foreground mb-1.5 block">Wash Instructions</label>
@@ -230,6 +270,43 @@ export default function TransactionsPage() {
                 )}
                 <Button size="sm" variant="outline" onClick={() => setSelectedTxn(null)} className="w-full sm:w-auto min-h-[44px] sm:min-h-0">
                   <X className="w-3.5 h-3.5 mr-1" /> Cancel
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+      {/* Reprint / QR Modal */}
+      <Dialog open={!!reprintTxn} onOpenChange={(open) => !open && setReprintTxn(null)}>
+        <DialogContent className="max-w-xs">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <QrCode className="w-4 h-4" /> Reprint Ticket
+            </DialogTitle>
+            <DialogDescription>
+              Scan or print this QR code for ticket {reprintTxn?.ticketId}.
+            </DialogDescription>
+          </DialogHeader>
+          {reprintTxn && (
+            <div className="flex flex-col items-center gap-3 py-4">
+              <QRCodeSVG
+                value={`https://laundrytrack.ph/ticket/${reprintTxn.ticketId}`}
+                size={180}
+                level="H"
+                includeMargin
+              />
+              <p className="text-sm font-mono font-semibold text-foreground">{reprintTxn.ticketId}</p>
+              <p className="text-xs text-muted-foreground">{reprintTxn.customerName}</p>
+              <div className="flex gap-2 mt-2 w-full">
+                <Button
+                  size="sm"
+                  className="flex-1 flex items-center gap-1.5"
+                  onClick={() => window.print()}
+                >
+                  <Printer className="w-3.5 h-3.5" /> Print
+                </Button>
+                <Button size="sm" variant="outline" className="flex-1" onClick={() => setReprintTxn(null)}>
+                  Close
                 </Button>
               </div>
             </div>

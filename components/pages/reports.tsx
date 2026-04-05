@@ -1,9 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { Download, FileText } from "lucide-react";
+import { Download, FileText, CalendarIcon } from "lucide-react";
+import { CSVLink } from "react-csv";
+import { format } from "date-fns";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -86,9 +89,12 @@ export default function ReportsPage() {
 
   // Export
   const [selectedExports, setSelectedExports] = useState<string[]>([]);
-  const [exportFrom, setExportFrom]   = useState("2026-04-01");
-  const [exportTo, setExportTo]       = useState("2026-04-05");
-  const [exportFormat, setExportFormat] = useState<"pdf" | "csv">("pdf");
+  const [exportFromDate, setExportFromDate] = useState<Date>(new Date("2026-04-01"));
+  const [exportToDate, setExportToDate]     = useState<Date>(new Date("2026-04-05"));
+  const [exportFormat, setExportFormat]     = useState<"pdf" | "csv">("pdf");
+
+  const exportFrom = format(exportFromDate, "yyyy-MM-dd");
+  const exportTo   = format(exportToDate,   "yyyy-MM-dd");
 
   const allSelected  = selectedExports.length === exportOptions.length;
   const someSelected = selectedExports.length > 0 && !allSelected;
@@ -102,6 +108,129 @@ export default function ReportsPage() {
   const toggleAll = () => {
     setSelectedExports(allSelected ? [] : exportOptions.map((o) => o.id));
   };
+
+  // ── CSV data ────────────────────────────────────────────────────────────────
+  const filteredTxns = transactions.filter((t) => {
+    if (!exportFrom || !exportTo) return true;
+    return t.dropOffDate >= exportFrom && t.dropOffDate <= exportTo;
+  });
+
+  const csvData = (() => {
+    const rows: (string | number)[][] = [];
+    if (selectedExports.includes("transactions")) {
+      rows.push(["TRANSACTIONS"]);
+      rows.push(["Ticket ID", "Customer", "Phone", "Drop-off", "Wash Type", "Weight (kg)", "Fee (₱)", "Status"]);
+      filteredTxns.forEach((t) =>
+        rows.push([t.ticketId, t.customerName, t.phone, t.dropOffDate, t.washType, t.weight, t.fee, t.status])
+      );
+      rows.push([]);
+    }
+    if (selectedExports.includes("analytics")) {
+      rows.push(["REVENUE BY SERVICE TYPE"]);
+      rows.push(["Service", "Transactions", "Revenue (₱)", "Avg per Order (₱)"]);
+      serviceRevenueData.forEach((r) =>
+        rows.push([r.service, r.count, r.revenue, Math.round(r.revenue / r.count)])
+      );
+      rows.push([]);
+    }
+    if (selectedExports.includes("customers")) {
+      rows.push(["LOYALTY MEMBERS"]);
+      // Use filtered transactions to derive unique customers
+      const seen = new Set<string>();
+      rows.push(["Name", "Phone", "Total Transactions", "Total Spent (₱)"]);
+      filteredTxns.forEach((t) => {
+        if (!seen.has(t.phone)) {
+          seen.add(t.phone);
+          const custTxns = filteredTxns.filter((x) => x.phone === t.phone);
+          rows.push([t.customerName, t.phone, custTxns.length, custTxns.reduce((s, x) => s + x.fee, 0)]);
+        }
+      });
+      rows.push([]);
+    }
+    return rows;
+  })();
+
+  // ── PDF export ──────────────────────────────────────────────────────────────
+  const handlePdfExport = async () => {
+    const { default: jsPDF } = await import("jspdf");
+    const autoTable = (await import("jspdf-autotable")).default;
+    const doc = new jsPDF();
+    let y = 14;
+
+    doc.setFontSize(16);
+    doc.setFont("helvetica", "bold");
+    doc.text("LaundryTrack — Export Report", 14, y);
+    y += 6;
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(120);
+    doc.text(`Date range: ${exportFrom} to ${exportTo}  |  Generated: ${new Date().toLocaleDateString()}`, 14, y);
+    doc.setTextColor(0);
+    y += 8;
+
+    if (selectedExports.includes("transactions")) {
+      doc.setFontSize(11);
+      doc.setFont("helvetica", "bold");
+      doc.text("Transactions", 14, y);
+      y += 4;
+      autoTable(doc, {
+        startY: y,
+        head: [["Ticket ID", "Customer", "Drop-off", "Type", "Weight", "Fee", "Status"]],
+        body: filteredTxns.map((t) => [
+          t.ticketId, t.customerName, t.dropOffDate, t.washType, `${t.weight} kg`, `₱${t.fee}`, t.status,
+        ]),
+        styles: { fontSize: 8 },
+        headStyles: { fillColor: [59, 130, 246] },
+        didDrawPage: (data: { cursor?: { y?: number } }) => { y = (data.cursor?.y ?? y) + 6; },
+      });
+      y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8;
+    }
+
+    if (selectedExports.includes("analytics")) {
+      doc.setFontSize(11);
+      doc.setFont("helvetica", "bold");
+      doc.text("Revenue by Service Type", 14, y);
+      y += 4;
+      autoTable(doc, {
+        startY: y,
+        head: [["Service", "Transactions", "Revenue (₱)", "Avg per Order (₱)"]],
+        body: serviceRevenueData.map((r) => [
+          r.service, r.count, `₱${r.revenue.toLocaleString()}`, `₱${Math.round(r.revenue / r.count)}`,
+        ]),
+        styles: { fontSize: 8 },
+        headStyles: { fillColor: [59, 130, 246] },
+        didDrawPage: (data: { cursor?: { y?: number } }) => { y = (data.cursor?.y ?? y) + 6; },
+      });
+      y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8;
+    }
+
+    if (selectedExports.includes("customers")) {
+      doc.setFontSize(11);
+      doc.setFont("helvetica", "bold");
+      doc.text("Customer List", 14, y);
+      y += 4;
+      const seen = new Set<string>();
+      const custRows: (string | number)[][] = [];
+      filteredTxns.forEach((t) => {
+        if (!seen.has(t.phone)) {
+          seen.add(t.phone);
+          const custTxns = filteredTxns.filter((x) => x.phone === t.phone);
+          custRows.push([t.customerName, t.phone, custTxns.length, `₱${custTxns.reduce((s, x) => s + x.fee, 0)}`]);
+        }
+      });
+      autoTable(doc, {
+        startY: y,
+        head: [["Name", "Phone", "Transactions", "Total Spent (₱)"]],
+        body: custRows,
+        styles: { fontSize: 8 },
+        headStyles: { fillColor: [59, 130, 246] },
+      });
+    }
+
+    doc.save(`laundrytrack-report-${exportFrom}-${exportTo}.pdf`);
+  };
+
+  const [summaryDate, setSummaryDate] = useState<Date>(new Date("2026-04-05"));
 
   return (
     <Tabs defaultValue="daily" className="space-y-4">
@@ -138,8 +267,20 @@ export default function ReportsPage() {
         <Card className="border border-border shadow-none">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
-              <CardTitle className="text-sm font-semibold">Transactions — April 5, 2026</CardTitle>
-              <Input type="date" defaultValue="2026-04-05" className="w-40 h-8 text-xs" />
+              <CardTitle className="text-sm font-semibold">
+                Transactions — {format(summaryDate, "MMMM d, yyyy")}
+              </CardTitle>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className="h-8 text-xs gap-1.5 px-2.5">
+                    <CalendarIcon className="w-3 h-3 text-muted-foreground" />
+                    {format(summaryDate, "MMM d, yyyy")}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="end">
+                  <Calendar mode="single" selected={summaryDate} onSelect={(d) => d && setSummaryDate(d)} initialFocus />
+                </PopoverContent>
+              </Popover>
             </div>
           </CardHeader>
           <CardContent className="p-0">
@@ -153,7 +294,7 @@ export default function ReportsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {transactions.filter((t) => t.dropOffDate === "2026-04-05").map((t) => (
+                  {transactions.filter((t) => t.dropOffDate === format(summaryDate, "yyyy-MM-dd")).map((t) => (
                     <tr key={t.id} className="border-b border-border last:border-0 hover:bg-muted/20">
                       <td className="px-4 py-2.5 text-xs font-mono text-primary">{t.ticketId}</td>
                       <td className="px-4 py-2.5 text-xs font-medium text-foreground">{t.customerName}</td>
@@ -308,7 +449,7 @@ export default function ReportsPage() {
         </Card>
       </TabsContent>
 
-      {/* ── Peak Analysis ──────────────────────────────────────────────────── */}
+      {/* ── Peak Analysis ─────────────────────��────────────────────────────── */}
       <TabsContent value="peak" className="space-y-4">
         <Card className="border border-border shadow-none">
           <CardHeader className="pb-3">
@@ -400,21 +541,31 @@ export default function ReportsPage() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs font-medium text-foreground block mb-1">Start Date</label>
-                <Input
-                  type="date"
-                  value={exportFrom}
-                  onChange={(e) => setExportFrom(e.target.value)}
-                  className="h-9 text-sm"
-                />
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className="w-full h-9 justify-start text-xs font-normal gap-2">
+                      <CalendarIcon className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                      {format(exportFromDate, "MMM d, yyyy")}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar mode="single" selected={exportFromDate} onSelect={(d) => d && setExportFromDate(d)} initialFocus />
+                  </PopoverContent>
+                </Popover>
               </div>
               <div>
                 <label className="text-xs font-medium text-foreground block mb-1">End Date</label>
-                <Input
-                  type="date"
-                  value={exportTo}
-                  onChange={(e) => setExportTo(e.target.value)}
-                  className="h-9 text-sm"
-                />
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className="w-full h-9 justify-start text-xs font-normal gap-2">
+                      <CalendarIcon className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                      {format(exportToDate, "MMM d, yyyy")}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar mode="single" selected={exportToDate} onSelect={(d) => d && setExportToDate(d)} initialFocus />
+                  </PopoverContent>
+                </Popover>
               </div>
             </div>
 
@@ -439,18 +590,33 @@ export default function ReportsPage() {
             </div>
 
             {/* Export button */}
-            <Button
-              size="sm"
-              disabled={selectedExports.length === 0}
-              className="flex items-center gap-1.5 w-full"
-            >
-              {exportFormat === "pdf"
-                ? <FileText className="w-3.5 h-3.5" />
-                : <Download className="w-3.5 h-3.5" />
-              }
-              Export as {exportFormat.toUpperCase()}
-              {selectedExports.length > 0 && ` (${selectedExports.length} selected)`}
-            </Button>
+            {exportFormat === "pdf" ? (
+              <Button
+                size="sm"
+                disabled={selectedExports.length === 0}
+                className="flex items-center gap-1.5 w-full"
+                onClick={handlePdfExport}
+              >
+                <FileText className="w-3.5 h-3.5" />
+                Export as PDF{selectedExports.length > 0 && ` (${selectedExports.length} selected)`}
+              </Button>
+            ) : (
+              <CSVLink
+                data={csvData}
+                filename={`laundrytrack-report-${exportFrom}-${exportTo}.csv`}
+                className={selectedExports.length === 0 ? "pointer-events-none opacity-50" : ""}
+              >
+                <Button
+                  size="sm"
+                  disabled={selectedExports.length === 0}
+                  className="flex items-center gap-1.5 w-full"
+                  asChild={false}
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  Export as CSV{selectedExports.length > 0 && ` (${selectedExports.length} selected)`}
+                </Button>
+              </CSVLink>
+            )}
           </CardContent>
         </Card>
       </TabsContent>

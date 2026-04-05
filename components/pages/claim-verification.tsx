@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { QrCode, Search, CheckCircle, XCircle, ShieldAlert } from "lucide-react";
+import { Search, CheckCircle, XCircle, ShieldAlert } from "lucide-react";
+import QRScanner from "@/components/qr-scanner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -91,17 +92,23 @@ export default function ClaimVerificationPage() {
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-semibold">QR Code Scanner</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="aspect-video bg-muted/50 border-2 border-dashed border-border rounded-xl flex flex-col items-center justify-center gap-3">
-              <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
-                <QrCode className="w-8 h-8 text-primary" />
-              </div>
-              <p className="text-sm text-muted-foreground">Camera preview area</p>
-              <p className="text-xs text-muted-foreground/70">Point QR code at camera to scan</p>
-              <Button size="sm" variant="outline" className="mt-1 min-h-[44px]">
-                Start Camera
-              </Button>
-            </div>
+          <CardContent>
+            <QRScanner
+              onScan={(ticketId) => {
+                setQuery(ticketId);
+                const found = transactions.find(
+                  (t) => t.ticketId.toLowerCase() === ticketId.toLowerCase()
+                );
+                if (found) {
+                  setResult(found);
+                  setNotFound(false);
+                  addLog(found.ticketId, "Scanned", "QR scan");
+                } else {
+                  setResult(null);
+                  setNotFound(true);
+                }
+              }}
+            />
           </CardContent>
         </Card>
 
