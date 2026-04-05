@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Download, FileText, CalendarIcon } from "lucide-react";
-import { CSVLink } from "react-csv";
+
 import { format } from "date-fns";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -115,11 +115,18 @@ export default function ReportsPage() {
     return t.dropOffDate >= exportFrom && t.dropOffDate <= exportTo;
   });
 
-  const csvData = (() => {
+  // ── Native CSV export ────────────────────────────────────────────────────────
+  const handleCsvExport = () => {
+    const escape = (v: string | number) => {
+      const s = String(v);
+      return s.includes(",") || s.includes('"') || s.includes("\n")
+        ? `"${s.replace(/"/g, '""')}"`
+        : s;
+    };
     const rows: (string | number)[][] = [];
     if (selectedExports.includes("transactions")) {
       rows.push(["TRANSACTIONS"]);
-      rows.push(["Ticket ID", "Customer", "Phone", "Drop-off", "Wash Type", "Weight (kg)", "Fee (₱)", "Status"]);
+      rows.push(["Ticket ID", "Customer", "Phone", "Drop-off", "Wash Type", "Weight (kg)", "Fee (PHP)", "Status"]);
       filteredTxns.forEach((t) =>
         rows.push([t.ticketId, t.customerName, t.phone, t.dropOffDate, t.washType, t.weight, t.fee, t.status])
       );
@@ -127,17 +134,16 @@ export default function ReportsPage() {
     }
     if (selectedExports.includes("analytics")) {
       rows.push(["REVENUE BY SERVICE TYPE"]);
-      rows.push(["Service", "Transactions", "Revenue (₱)", "Avg per Order (₱)"]);
+      rows.push(["Service", "Transactions", "Revenue (PHP)", "Avg per Order (PHP)"]);
       serviceRevenueData.forEach((r) =>
         rows.push([r.service, r.count, r.revenue, Math.round(r.revenue / r.count)])
       );
       rows.push([]);
     }
     if (selectedExports.includes("customers")) {
-      rows.push(["LOYALTY MEMBERS"]);
-      // Use filtered transactions to derive unique customers
+      rows.push(["CUSTOMER LIST"]);
+      rows.push(["Name", "Phone", "Total Transactions", "Total Spent (PHP)"]);
       const seen = new Set<string>();
-      rows.push(["Name", "Phone", "Total Transactions", "Total Spent (₱)"]);
       filteredTxns.forEach((t) => {
         if (!seen.has(t.phone)) {
           seen.add(t.phone);
@@ -145,89 +151,73 @@ export default function ReportsPage() {
           rows.push([t.customerName, t.phone, custTxns.length, custTxns.reduce((s, x) => s + x.fee, 0)]);
         }
       });
-      rows.push([]);
     }
-    return rows;
-  })();
+    const csv = rows.map((r) => r.map(escape).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `laundrytrack-report-${exportFrom}-${exportTo}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
-  // ── PDF export ──────────────────────────────────────────────────────────────
-  const handlePdfExport = async () => {
-    const { default: jsPDF } = await import("jspdf");
-    const autoTable = (await import("jspdf-autotable")).default;
-    const doc = new jsPDF();
-    let y = 14;
+  // ── Native PDF export (browser print) ───────────────────────────────────────
+  const handlePdfExport = () => {
+    const buildTable = (headers: string[], bodyRows: (string | number)[][]) => `
+      <table>
+        <thead><tr>${headers.map((h) => `<th>${h}</th>`).join("")}</tr></thead>
+        <tbody>${bodyRows.map((r) => `<tr>${r.map((c) => `<td>${c}</td>`).join("")}</tr>`).join("")}</tbody>
+      </table>`;
 
-    doc.setFontSize(16);
-    doc.setFont("helvetica", "bold");
-    doc.text("LaundryTrack — Export Report", 14, y);
-    y += 6;
-    doc.setFontSize(9);
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(120);
-    doc.text(`Date range: ${exportFrom} to ${exportTo}  |  Generated: ${new Date().toLocaleDateString()}`, 14, y);
-    doc.setTextColor(0);
-    y += 8;
-
+    let sections = "";
     if (selectedExports.includes("transactions")) {
-      doc.setFontSize(11);
-      doc.setFont("helvetica", "bold");
-      doc.text("Transactions", 14, y);
-      y += 4;
-      autoTable(doc, {
-        startY: y,
-        head: [["Ticket ID", "Customer", "Drop-off", "Type", "Weight", "Fee", "Status"]],
-        body: filteredTxns.map((t) => [
-          t.ticketId, t.customerName, t.dropOffDate, t.washType, `${t.weight} kg`, `₱${t.fee}`, t.status,
-        ]),
-        styles: { fontSize: 8 },
-        headStyles: { fillColor: [59, 130, 246] },
-        didDrawPage: (data: { cursor?: { y?: number } }) => { y = (data.cursor?.y ?? y) + 6; },
-      });
-      y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8;
+      sections += `<h2>Transactions</h2>${buildTable(
+        ["Ticket ID", "Customer", "Phone", "Drop-off", "Wash Type", "Weight", "Fee", "Status"],
+        filteredTxns.map((t) => [t.ticketId, t.customerName, t.phone, t.dropOffDate, t.washType, `${t.weight} kg`, `PHP ${t.fee}`, t.status])
+      )}`;
     }
-
     if (selectedExports.includes("analytics")) {
-      doc.setFontSize(11);
-      doc.setFont("helvetica", "bold");
-      doc.text("Revenue by Service Type", 14, y);
-      y += 4;
-      autoTable(doc, {
-        startY: y,
-        head: [["Service", "Transactions", "Revenue (₱)", "Avg per Order (₱)"]],
-        body: serviceRevenueData.map((r) => [
-          r.service, r.count, `₱${r.revenue.toLocaleString()}`, `₱${Math.round(r.revenue / r.count)}`,
-        ]),
-        styles: { fontSize: 8 },
-        headStyles: { fillColor: [59, 130, 246] },
-        didDrawPage: (data: { cursor?: { y?: number } }) => { y = (data.cursor?.y ?? y) + 6; },
-      });
-      y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8;
+      sections += `<h2>Revenue by Service Type</h2>${buildTable(
+        ["Service", "Transactions", "Revenue (PHP)", "Avg per Order (PHP)"],
+        serviceRevenueData.map((r) => [r.service, r.count, r.revenue.toLocaleString(), Math.round(r.revenue / r.count)])
+      )}`;
     }
-
     if (selectedExports.includes("customers")) {
-      doc.setFontSize(11);
-      doc.setFont("helvetica", "bold");
-      doc.text("Customer List", 14, y);
-      y += 4;
       const seen = new Set<string>();
       const custRows: (string | number)[][] = [];
       filteredTxns.forEach((t) => {
         if (!seen.has(t.phone)) {
           seen.add(t.phone);
-          const custTxns = filteredTxns.filter((x) => x.phone === t.phone);
-          custRows.push([t.customerName, t.phone, custTxns.length, `₱${custTxns.reduce((s, x) => s + x.fee, 0)}`]);
+          const ct = filteredTxns.filter((x) => x.phone === t.phone);
+          custRows.push([t.customerName, t.phone, ct.length, ct.reduce((s, x) => s + x.fee, 0)]);
         }
       });
-      autoTable(doc, {
-        startY: y,
-        head: [["Name", "Phone", "Transactions", "Total Spent (₱)"]],
-        body: custRows,
-        styles: { fontSize: 8 },
-        headStyles: { fillColor: [59, 130, 246] },
-      });
+      sections += `<h2>Customer List</h2>${buildTable(["Name", "Phone", "Transactions", "Total Spent (PHP)"], custRows)}`;
     }
 
-    doc.save(`laundrytrack-report-${exportFrom}-${exportTo}.pdf`);
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>LaundryTrack Report</title>
+      <style>
+        body{font-family:sans-serif;font-size:12px;padding:24px;color:#111}
+        h1{font-size:18px;margin-bottom:4px}
+        h2{font-size:14px;margin-top:24px;margin-bottom:8px;color:#1d4ed8}
+        p{color:#666;margin-bottom:16px;font-size:11px}
+        table{width:100%;border-collapse:collapse;margin-bottom:8px}
+        th{background:#1d4ed8;color:#fff;text-align:left;padding:6px 8px;font-size:11px}
+        td{padding:5px 8px;border-bottom:1px solid #e5e7eb;font-size:11px}
+        tr:nth-child(even) td{background:#f8fafc}
+      </style></head><body>
+      <h1>LaundryTrack — Export Report</h1>
+      <p>Date range: ${exportFrom} to ${exportTo} | Generated: ${new Date().toLocaleDateString()}</p>
+      ${sections}
+      </body></html>`;
+
+    const w = window.open("", "_blank");
+    if (!w) return;
+    w.document.write(html);
+    w.document.close();
+    w.focus();
+    w.print();
   };
 
   const [summaryDate, setSummaryDate] = useState<Date>(new Date("2026-04-05"));
@@ -590,33 +580,18 @@ export default function ReportsPage() {
             </div>
 
             {/* Export button */}
-            {exportFormat === "pdf" ? (
-              <Button
-                size="sm"
-                disabled={selectedExports.length === 0}
-                className="flex items-center gap-1.5 w-full"
-                onClick={handlePdfExport}
-              >
-                <FileText className="w-3.5 h-3.5" />
-                Export as PDF{selectedExports.length > 0 && ` (${selectedExports.length} selected)`}
-              </Button>
-            ) : (
-              <CSVLink
-                data={csvData}
-                filename={`laundrytrack-report-${exportFrom}-${exportTo}.csv`}
-                className={selectedExports.length === 0 ? "pointer-events-none opacity-50" : ""}
-              >
-                <Button
-                  size="sm"
-                  disabled={selectedExports.length === 0}
-                  className="flex items-center gap-1.5 w-full"
-                  asChild={false}
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  Export as CSV{selectedExports.length > 0 && ` (${selectedExports.length} selected)`}
-                </Button>
-              </CSVLink>
-            )}
+            <Button
+              size="sm"
+              disabled={selectedExports.length === 0}
+              className="flex items-center gap-1.5 w-full"
+              onClick={exportFormat === "pdf" ? handlePdfExport : handleCsvExport}
+            >
+              {exportFormat === "pdf"
+                ? <FileText className="w-3.5 h-3.5" />
+                : <Download className="w-3.5 h-3.5" />}
+              Export as {exportFormat.toUpperCase()}
+              {selectedExports.length > 0 && ` (${selectedExports.length} selected)`}
+            </Button>
           </CardContent>
         </Card>
       </TabsContent>

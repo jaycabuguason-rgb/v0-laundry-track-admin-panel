@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Search, Eye, Edit, Ban, Printer, ChevronRight, X, QrCode, CalendarIcon } from "lucide-react";
-import { QRCodeSVG } from "qrcode.react";
+
 import { format } from "date-fns";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -239,11 +239,12 @@ export default function TransactionsPage() {
 
               {/* QR Code */}
               <div className="flex flex-col items-center gap-2 py-2 bg-muted/30 rounded-lg">
-                <QRCodeSVG
-                  value={`https://laundrytrack.ph/ticket/${selectedTxn.ticketId}`}
-                  size={100}
-                  level="M"
-                  includeMargin
+                <img
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${encodeURIComponent(`https://laundrytrack.ph/ticket/${selectedTxn.ticketId}`)}`}
+                  alt={`QR code for ${selectedTxn.ticketId}`}
+                  width={100}
+                  height={100}
+                  crossOrigin="anonymous"
                 />
                 <p className="text-[10px] text-muted-foreground font-mono">{selectedTxn.ticketId}</p>
               </div>
@@ -289,11 +290,12 @@ export default function TransactionsPage() {
           </DialogHeader>
           {reprintTxn && (
             <div className="flex flex-col items-center gap-3 py-4">
-              <QRCodeSVG
-                value={`https://laundrytrack.ph/ticket/${reprintTxn.ticketId}`}
-                size={180}
-                level="H"
-                includeMargin
+              <img
+                src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(`https://laundrytrack.ph/ticket/${reprintTxn.ticketId}`)}`}
+                alt={`QR code for ${reprintTxn.ticketId}`}
+                width={180}
+                height={180}
+                crossOrigin="anonymous"
               />
               <p className="text-sm font-mono font-semibold text-foreground">{reprintTxn.ticketId}</p>
               <p className="text-xs text-muted-foreground">{reprintTxn.customerName}</p>

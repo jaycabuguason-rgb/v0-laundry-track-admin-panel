@@ -1,79 +1,97 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { CameraOff } from "lucide-react";
-
-// Types only — actual module is dynamically imported at runtime (browser-only)
-type Html5QrcodeType = import("html5-qrcode").Html5Qrcode;
 
 interface QRScannerProps {
   onScan: (value: string) => void;
 }
 
 export default function QRScanner({ onScan }: QRScannerProps) {
-  const containerId = "qr-reader-container";
-  const scannerRef = useRef<Html5QrcodeType | null>(null);
+  const videoRef   = useRef<HTMLVideoElement | null>(null);
+  const streamRef  = useRef<MediaStream | null>(null);
+  const rafRef     = useRef<number | null>(null);
+  const canvasRef  = useRef<HTMLCanvasElement | null>(null);
   const [active, setActive] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError]   = useState<string | null>(null);
 
-  const startScanner = async () => {
+  const stopScanner = useCallback(() => {
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    rafRef.current = null;
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+    }
+    if (videoRef.current) videoRef.current.srcObject = null;
+    setActive(false);
+  }, []);
+
+  const startScanner = useCallback(async () => {
     setError(null);
     try {
-      const { Html5Qrcode, Html5QrcodeSupportedFormats } = await import("html5-qrcode");
-      const scanner = new Html5Qrcode(containerId, {
-        formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
-        verbose: false,
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "environment" },
       });
-      scannerRef.current = scanner;
-
-      await scanner.start(
-        { facingMode: "environment" },
-        { fps: 10, qrbox: { width: 220, height: 220 } },
-        (decodedText) => {
-          // Extract ticket ID from URL or use raw value
-          const match = decodedText.match(/ticket\/([A-Z0-9-]+)/);
-          const ticketId = match ? match[1] : decodedText;
-          onScan(ticketId);
-          stopScanner();
-        },
-        () => { /* ignore non-match frames */ }
-      );
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+      }
       setActive(true);
+
+      // Use BarcodeDetector if available (Chrome 83+, Edge, Safari 17+)
+      const BD = (window as unknown as { BarcodeDetector?: new (opts: { formats: string[] }) => { detect: (src: HTMLVideoElement) => Promise<{ rawValue: string }[]> } }).BarcodeDetector;
+      if (!BD) {
+        setError("QR scanning is not supported in this browser. Try Chrome or Edge. You can still use Manual Lookup below.");
+        stopScanner();
+        return;
+      }
+      const detector = new BD({ formats: ["qr_code"] });
+
+      const tick = async () => {
+        if (!videoRef.current || videoRef.current.readyState < 2) {
+          rafRef.current = requestAnimationFrame(tick);
+          return;
+        }
+        try {
+          const results = await detector.detect(videoRef.current);
+          if (results.length > 0) {
+            const raw = results[0].rawValue;
+            const match = raw.match(/ticket\/([A-Z0-9-]+)/i);
+            const ticketId = match ? match[1].toUpperCase() : raw;
+            onScan(ticketId);
+            stopScanner();
+            return;
+          }
+        } catch { /* continue scanning */ }
+        rafRef.current = requestAnimationFrame(tick);
+      };
+      rafRef.current = requestAnimationFrame(tick);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      setError(msg.includes("Permission") || msg.includes("permission")
-        ? "Camera permission denied. Please allow camera access and try again."
-        : "Could not start camera. Please check your device and browser permissions.");
+      setError(
+        msg.toLowerCase().includes("permission") || msg.toLowerCase().includes("denied")
+          ? "Camera permission denied. Please allow camera access and try again."
+          : "Could not start camera. Check your device and browser permissions."
+      );
     }
-  };
+  }, [onScan, stopScanner]);
 
-  const stopScanner = async () => {
-    if (scannerRef.current) {
-      try {
-        await scannerRef.current.stop();
-        scannerRef.current.clear();
-      } catch {
-        // already stopped
-      }
-      scannerRef.current = null;
-    }
-    setActive(false);
-  };
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      stopScanner();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  useEffect(() => () => { stopScanner(); }, [stopScanner]);
 
   return (
     <div className="space-y-3">
       {/* Scanner viewport */}
       <div className="relative bg-black rounded-xl overflow-hidden" style={{ aspectRatio: "4/3" }}>
-        <div id={containerId} className="w-full h-full" />
+        <video
+          ref={videoRef}
+          muted
+          playsInline
+          className="w-full h-full object-cover"
+        />
+        {/* Hidden canvas used if needed */}
+        <canvas ref={canvasRef} className="hidden" />
 
         {!active && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-muted/60 backdrop-blur-sm">
@@ -88,13 +106,9 @@ export default function QRScanner({ onScan }: QRScannerProps) {
         {active && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
             <div className="relative w-48 h-48">
-              {/* Top-left */}
               <span className="absolute top-0 left-0 w-6 h-6 border-t-2 border-l-2 border-white rounded-tl-sm" />
-              {/* Top-right */}
               <span className="absolute top-0 right-0 w-6 h-6 border-t-2 border-r-2 border-white rounded-tr-sm" />
-              {/* Bottom-left */}
               <span className="absolute bottom-0 left-0 w-6 h-6 border-b-2 border-l-2 border-white rounded-bl-sm" />
-              {/* Bottom-right */}
               <span className="absolute bottom-0 right-0 w-6 h-6 border-b-2 border-r-2 border-white rounded-br-sm" />
             </div>
           </div>
