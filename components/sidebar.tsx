@@ -29,7 +29,9 @@ export type Page =
   | "settings-service-types"
   | "settings-business-profile"
   | "settings-backup"
-  | "loyalty";
+  | "loyalty"
+  | "profile"
+  | "change-password";
 
 interface SidebarProps {
   activePage: Page;

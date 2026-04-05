@@ -9,6 +9,8 @@ import ClaimVerificationPage from "@/components/pages/claim-verification";
 import ReportsPage from "@/components/pages/reports";
 import SettingsPage from "@/components/pages/settings";
 import LoyaltyPage from "@/components/pages/loyalty";
+import ProfilePage from "@/components/pages/profile";
+import ChangePasswordPage from "@/components/pages/change-password";
 
 export default function AppShell() {
   const [activePage, setActivePage] = useState<Page>("dashboard");
@@ -25,6 +27,8 @@ export default function AppShell() {
       case "settings-backup":
         return <SettingsPage page={activePage} />;
       case "loyalty": return <LoyaltyPage />;
+      case "profile": return <ProfilePage />;
+      case "change-password": return <ChangePasswordPage />;
       default: return <DashboardPage />;
     }
   };

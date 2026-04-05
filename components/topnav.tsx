@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Bell, ChevronDown, User, Eye, X } from "lucide-react";
+import { Bell, ChevronDown, User, Eye, X, KeyRound, LogOut } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -24,6 +24,8 @@ const pageTitles: Record<Page, string> = {
   "settings-business-profile": "Settings — Business Profile",
   "settings-backup": "Settings — Backup & Restore",
   loyalty: "Loyalty Members",
+  profile: "My Profile",
+  "change-password": "Change Password",
 };
 
 const notifTypeColors: Record<Notification["type"], string> = {
@@ -144,11 +146,30 @@ export default function TopNav({ activePage, onNavigate }: TopNavProps) {
               <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-44">
-            <DropdownMenuItem>Profile</DropdownMenuItem>
-            <DropdownMenuItem>Change Password</DropdownMenuItem>
+          <DropdownMenuContent align="end" className="w-48">
+            <div className="px-3 py-2 border-b border-border">
+              <p className="text-xs font-semibold text-foreground">Admin</p>
+              <p className="text-[11px] text-muted-foreground">admin@laundrytrack.ph</p>
+            </div>
+            <DropdownMenuItem
+              className="cursor-pointer mt-1"
+              onClick={() => onNavigate("profile")}
+            >
+              <User className="w-3.5 h-3.5 mr-2 text-muted-foreground" />
+              Profile
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              className="cursor-pointer"
+              onClick={() => onNavigate("change-password")}
+            >
+              <KeyRound className="w-3.5 h-3.5 mr-2 text-muted-foreground" />
+              Change Password
+            </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="text-destructive">Sign Out</DropdownMenuItem>
+            <DropdownMenuItem className="cursor-pointer text-destructive focus:text-destructive">
+              <LogOut className="w-3.5 h-3.5 mr-2" />
+              Sign Out
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
