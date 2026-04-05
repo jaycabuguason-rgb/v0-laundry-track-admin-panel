@@ -12,7 +12,11 @@ import LoyaltyPage from "@/components/pages/loyalty";
 import ProfilePage from "@/components/pages/profile";
 import ChangePasswordPage from "@/components/pages/change-password";
 
-export default function AppShell() {
+interface AppShellProps {
+  onSignOut: () => void;
+}
+
+export default function AppShell({ onSignOut }: AppShellProps) {
   const [activePage, setActivePage] = useState<Page>("dashboard");
 
   const renderPage = () => {
@@ -37,7 +41,7 @@ export default function AppShell() {
     <div className="flex h-screen overflow-hidden bg-background">
       <Sidebar activePage={activePage} onNavigate={setActivePage} />
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
-        <TopNav activePage={activePage} onNavigate={setActivePage} />
+        <TopNav activePage={activePage} onNavigate={setActivePage} onSignOut={onSignOut} />
         <main className="flex-1 overflow-y-auto p-6">
           {renderPage()}
         </main>

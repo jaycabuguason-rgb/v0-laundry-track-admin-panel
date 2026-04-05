@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Bell, ChevronDown, User, Eye, X, KeyRound, LogOut } from "lucide-react";
+import { Bell, ChevronDown, User, Eye, X, KeyRound, LogOut, AlertTriangle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,6 +12,13 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { initialNotifications, type Notification } from "@/lib/data";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { type Page } from "@/components/sidebar";
 
 const pageTitles: Record<Page, string> = {
@@ -38,11 +45,13 @@ const notifTypeColors: Record<Notification["type"], string> = {
 interface TopNavProps {
   activePage: Page;
   onNavigate: (page: Page) => void;
+  onSignOut: () => void;
 }
 
-export default function TopNav({ activePage, onNavigate }: TopNavProps) {
+export default function TopNav({ activePage, onNavigate, onSignOut }: TopNavProps) {
   const [notifications, setNotifications] = useState<Notification[]>(initialNotifications);
   const [notifOpen, setNotifOpen] = useState(false);
+  const [signOutOpen, setSignOutOpen] = useState(false);
 
   const dismiss = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -166,13 +175,52 @@ export default function TopNav({ activePage, onNavigate }: TopNavProps) {
               Change Password
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="cursor-pointer text-destructive focus:text-destructive">
+            <DropdownMenuItem
+              className="cursor-pointer text-destructive focus:text-destructive"
+              onClick={() => setSignOutOpen(true)}
+            >
               <LogOut className="w-3.5 h-3.5 mr-2" />
               Sign Out
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+
+      {/* Sign Out Confirmation Modal */}
+      <Dialog open={signOutOpen} onOpenChange={setSignOutOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <div className="flex items-center gap-3 mb-1">
+              <div className="w-10 h-10 rounded-full bg-destructive/10 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-5 h-5 text-destructive" />
+              </div>
+              <DialogTitle className="text-base">Sign Out</DialogTitle>
+            </div>
+            <DialogDescription className="text-sm text-muted-foreground pl-[52px]">
+              Are you sure you want to sign out? You will be returned to the login page.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex gap-3 justify-end mt-2">
+            <Button
+              variant="outline"
+              className="cursor-pointer"
+              onClick={() => setSignOutOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              className="cursor-pointer"
+              onClick={() => {
+                setSignOutOpen(false);
+                onSignOut();
+              }}
+            >
+              Sign Out
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </header>
   );
 }
