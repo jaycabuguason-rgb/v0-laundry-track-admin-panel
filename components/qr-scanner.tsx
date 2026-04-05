@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Html5Qrcode, Html5QrcodeSupportedFormats } from "html5-qrcode";
 import { Button } from "@/components/ui/button";
 import { CameraOff } from "lucide-react";
+
+// Types only — actual module is dynamically imported at runtime (browser-only)
+type Html5QrcodeType = import("html5-qrcode").Html5Qrcode;
 
 interface QRScannerProps {
   onScan: (value: string) => void;
@@ -11,13 +13,14 @@ interface QRScannerProps {
 
 export default function QRScanner({ onScan }: QRScannerProps) {
   const containerId = "qr-reader-container";
-  const scannerRef = useRef<Html5Qrcode | null>(null);
+  const scannerRef = useRef<Html5QrcodeType | null>(null);
   const [active, setActive] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const startScanner = async () => {
     setError(null);
     try {
+      const { Html5Qrcode, Html5QrcodeSupportedFormats } = await import("html5-qrcode");
       const scanner = new Html5Qrcode(containerId, {
         formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
         verbose: false,
