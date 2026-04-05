@@ -162,84 +162,28 @@ export default function ReportsPage() {
     URL.revokeObjectURL(url);
   };
 
-  // ── jsPDF export ─────────────────────────────────────────────────────────────
-  const handlePdfExport = async () => {
-    // Dynamically import to ensure browser-only execution
-    const jsPDFModule   = await import("jspdf");
-    const autoTableMod  = await import("jspdf-autotable");
-    const jsPDF         = jsPDFModule.default;
-    const autoTable     = autoTableMod.default;
+  // ── Native print-to-PDF export ───────────────────────────────────────────────
+  const handlePdfExport = () => {
+    const mkTable = (headers: string[], rows: (string | number)[][]) => `
+      <table>
+        <thead><tr>${headers.map((h) => `<th>${h}</th>`).join("")}</tr></thead>
+        <tbody>${rows.map((r) => `<tr>${r.map((c) => `<td>${c}</td>`).join("")}</tr>`).join("")}</tbody>
+      </table>`;
 
-    const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-    const BLUE: [number, number, number] = [29, 78, 216];
-    const fileName = `LaundryTrack_Report_${format(new Date(), "yyyy-MM-dd")}.pdf`;
-
-    // ── Header ──────────────────────────────────────────────────────────────
-    doc.setFillColor(...BLUE);
-    doc.rect(0, 0, 210, 22, "F");
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(14);
-    doc.setFont("helvetica", "bold");
-    doc.text("LaundryTrack — Export Report", 14, 13);
-    doc.setFontSize(8);
-    doc.setFont("helvetica", "normal");
-    doc.text(`LaundryTrack Shop  |  Date range: ${exportFrom} to ${exportTo}  |  Generated: ${new Date().toLocaleDateString()}`, 14, 19);
-    doc.setTextColor(0, 0, 0);
-
-    let startY = 30;
-    let isFirstSection = true;
-
-    const addSection = (title: string, head: string[][], body: (string | number)[][]) => {
-      if (!isFirstSection) {
-        doc.addPage();
-        // Re-draw mini header on new pages
-        doc.setFillColor(...BLUE);
-        doc.rect(0, 0, 210, 14, "F");
-        doc.setTextColor(255, 255, 255);
-        doc.setFontSize(9);
-        doc.setFont("helvetica", "bold");
-        doc.text("LaundryTrack — Export Report (cont.)", 14, 9);
-        doc.setTextColor(0, 0, 0);
-        startY = 20;
-      }
-      doc.setFontSize(11);
-      doc.setFont("helvetica", "bold");
-      doc.setTextColor(...BLUE);
-      doc.text(title, 14, startY);
-      doc.setTextColor(0, 0, 0);
-      startY += 2;
-
-      autoTable(doc, {
-        startY,
-        head,
-        body: body.map((r) => r.map(String)),
-        styles: { fontSize: 8, cellPadding: 2.5 },
-        headStyles: { fillColor: BLUE, textColor: 255, fontStyle: "bold" },
-        alternateRowStyles: { fillColor: [248, 250, 252] },
-        margin: { left: 14, right: 14 },
-      });
-
-      // @ts-expect-error jspdf-autotable adds lastAutoTable to the doc instance
-      startY = doc.lastAutoTable.finalY + 8;
-      isFirstSection = false;
-    };
+    let body = "";
 
     if (selectedExports.includes("transactions")) {
-      addSection(
-        "Transactions",
-        [["Ticket ID", "Customer", "Phone", "Drop-off Date", "Wash Type", "Weight", "Fee (PHP)", "Status"]],
+      body += `<h2>Transactions</h2>${mkTable(
+        ["Ticket ID", "Customer", "Phone", "Drop-off", "Wash Type", "Weight", "Fee", "Status"],
         filteredTxns.map((t) => [t.ticketId, t.customerName, t.phone, t.dropOffDate, t.washType, `${t.weight} kg`, `PHP ${t.fee}`, t.status])
-      );
+      )}`;
     }
-
     if (selectedExports.includes("analytics")) {
-      addSection(
-        "Revenue by Service Type",
-        [["Service", "Transactions", "Revenue (PHP)", "Avg per Order (PHP)"]],
+      body += `<h2>Revenue by Service Type</h2>${mkTable(
+        ["Service", "Transactions", "Revenue (PHP)", "Avg per Order (PHP)"],
         serviceRevenueData.map((r) => [r.service, r.count, r.revenue.toLocaleString(), Math.round(r.revenue / r.count)])
-      );
+      )}`;
     }
-
     if (selectedExports.includes("customers")) {
       const seen = new Set<string>();
       const custRows: (string | number)[][] = [];
@@ -250,14 +194,38 @@ export default function ReportsPage() {
           custRows.push([t.customerName, t.phone, ct.length, ct.reduce((s, x) => s + x.fee, 0)]);
         }
       });
-      addSection(
-        "Customer List",
-        [["Name", "Phone", "Total Transactions", "Total Spent (PHP)"]],
-        custRows
-      );
+      body += `<h2>Customer List</h2>${mkTable(["Name", "Phone", "Transactions", "Total Spent (PHP)"], custRows)}`;
     }
 
-    doc.save(fileName);
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+      <title>LaundryTrack Report</title>
+      <style>
+        *{box-sizing:border-box}
+        body{font-family:Arial,sans-serif;font-size:11px;padding:24px;color:#111;margin:0}
+        .header{background:#1d4ed8;color:#fff;padding:12px 16px;border-radius:6px;margin-bottom:6px}
+        .header h1{margin:0;font-size:16px}
+        .header p{margin:4px 0 0;font-size:10px;opacity:0.85}
+        h2{font-size:12px;color:#1d4ed8;margin:20px 0 6px;border-bottom:1px solid #dbeafe;padding-bottom:4px}
+        table{width:100%;border-collapse:collapse;margin-bottom:12px}
+        th{background:#1d4ed8;color:#fff;text-align:left;padding:5px 7px;font-size:10px}
+        td{padding:4px 7px;border-bottom:1px solid #e5e7eb;font-size:10px}
+        tr:nth-child(even) td{background:#f8fafc}
+        @media print{body{padding:12px}}
+      </style></head>
+      <body>
+        <div class="header">
+          <h1>LaundryTrack — Export Report</h1>
+          <p>Date range: ${exportFrom} to ${exportTo} &nbsp;|&nbsp; Generated: ${new Date().toLocaleDateString()}</p>
+        </div>
+        ${body}
+      </body></html>`;
+
+    const w = window.open("", "_blank");
+    if (!w) return;
+    w.document.write(html);
+    w.document.close();
+    w.focus();
+    setTimeout(() => w.print(), 300);
   };
 
   const [summaryDate, setSummaryDate] = useState<Date>(new Date("2026-04-05"));
