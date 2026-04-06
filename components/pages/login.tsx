@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { Eye, EyeOff, WashingMachine } from "lucide-react";
+import { Eye, EyeOff, WashingMachine, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { signIn } from "@/lib/supabase/actions";
 
 interface LoginPageProps {
   onLogin: () => void;
@@ -16,14 +17,24 @@ export default function LoginPage({ onLogin, onForgotPassword }: LoginPageProps)
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
-  const [error, setError] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
     if (!email.trim() || !password.trim()) {
-      setError(true);
+      setError("Please fill in all fields.");
       return;
     }
-    setError(false);
+    setError(null);
+    setLoading(true);
+    const result = await signIn(email.trim(), password);
+    setLoading(false);
+    if (result.error) {
+      setError(result.error === "Invalid login credentials"
+        ? "Invalid email or password. Please try again."
+        : result.error);
+      return;
+    }
     onLogin();
   };
 
@@ -60,7 +71,7 @@ export default function LoginPage({ onLogin, onForgotPassword }: LoginPageProps)
           {/* Error banner */}
           {error && (
             <div className="mb-4 rounded-lg bg-destructive/10 border border-destructive/20 px-3 py-2 text-xs text-destructive font-medium text-center">
-              Please fill in all fields.
+              {error}
             </div>
           )}
 
@@ -124,8 +135,11 @@ export default function LoginPage({ onLogin, onForgotPassword }: LoginPageProps)
             <Button
               className="w-full mt-1 cursor-pointer"
               onClick={handleLogin}
+              disabled={loading}
             >
-              Login
+              {loading ? (
+                <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Signing in...</>
+              ) : "Login"}
             </Button>
 
             {/* Forgot password */}

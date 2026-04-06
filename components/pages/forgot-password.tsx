@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { WashingMachine, ArrowLeft, CheckCircle2, Mail } from "lucide-react";
+import { WashingMachine, ArrowLeft, CheckCircle2, Mail, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { resetPassword } from "@/lib/supabase/actions";
 
 interface ForgotPasswordPageProps {
   onBack: () => void;
@@ -12,15 +13,23 @@ interface ForgotPasswordPageProps {
 
 export default function ForgotPasswordPage({ onBack }: ForgotPasswordPageProps) {
   const [email, setEmail] = useState("");
-  const [error, setError] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!email.trim()) {
-      setError(true);
+      setError("Please enter your email address.");
       return;
     }
-    setError(false);
+    setError(null);
+    setLoading(true);
+    const result = await resetPassword(email.trim());
+    setLoading(false);
+    if (result.error) {
+      setError(result.error);
+      return;
+    }
     setSubmitted(true);
   };
 
@@ -75,7 +84,7 @@ export default function ForgotPasswordPage({ onBack }: ForgotPasswordPageProps) 
 
               {error && (
                 <div className="mb-4 rounded-lg bg-destructive/10 border border-destructive/20 px-3 py-2 text-xs text-destructive font-medium text-center">
-                  Please enter your email address.
+                  {error}
                 </div>
               )}
 
@@ -99,8 +108,10 @@ export default function ForgotPasswordPage({ onBack }: ForgotPasswordPageProps) 
                   </div>
                 </div>
 
-                <Button className="w-full cursor-pointer" onClick={handleSubmit}>
-                  Send Reset Link
+                <Button className="w-full cursor-pointer" onClick={handleSubmit} disabled={loading}>
+                  {loading ? (
+                    <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Sending...</>
+                  ) : "Send Reset Link"}
                 </Button>
 
                 <button

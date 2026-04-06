@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { fetchServiceTypes, upsertServiceType, deleteServiceType } from "@/lib/supabase/db";
 import { Plus, Trash2, Edit, Save, Upload, Clock, Download, Loader2, CheckCircle2, Scale, ShoppingBasket, Package, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -366,36 +367,34 @@ const PRICING_TYPE_LABELS: Record<PricingType, string> = {
   "flat-rate": "Flat rate",
 };
 
-const LS_KEY = "laundrytrack_service_types";
-
 const DEFAULT_SERVICES: ServiceType[] = [
-  { id: "1", name: "Regular",           description: "Standard wash & dry",              price: "30",  pricingType: "per-kg",   active: true  },
-  { id: "2", name: "Delicate",          description: "Gentle cycle for delicate fabrics", price: "40",  pricingType: "per-kg",   active: true  },
-  { id: "3", name: "Express",           description: "Same-day turnaround",               price: "50",  pricingType: "per-kg",   active: true  },
-  { id: "4", name: "Bulk / Commercial", description: "For 10kg and above",                price: "250", pricingType: "per-load", active: false },
+  { id: "seed-1", name: "Regular",           description: "Standard wash & dry",              price: "30",  pricingType: "per-kg",   active: true  },
+  { id: "seed-2", name: "Delicate",          description: "Gentle cycle for delicate fabrics", price: "40",  pricingType: "per-kg",   active: true  },
+  { id: "seed-3", name: "Express",           description: "Same-day turnaround",               price: "50",  pricingType: "per-kg",   active: true  },
+  { id: "seed-4", name: "Bulk / Commercial", description: "For 10kg and above",                price: "250", pricingType: "per-load", active: false },
 ];
 
-function loadServices(): ServiceType[] {
-  if (typeof window === "undefined") return DEFAULT_SERVICES;
-  try {
-    const raw = localStorage.getItem(LS_KEY);
-    if (raw) return JSON.parse(raw) as ServiceType[];
-  } catch { /* ignore */ }
-  return DEFAULT_SERVICES;
-}
-
-function persistServices(list: ServiceType[]) {
-  try { localStorage.setItem(LS_KEY, JSON.stringify(list)); } catch { /* ignore */ }
+function dbRowToServiceType(row: Record<string, unknown>): ServiceType {
+  return {
+    id: row.id as string,
+    name: row.name as string,
+    description: (row.description as string) ?? "",
+    price: String(row.price ?? "0"),
+    pricingType: (row.pricing_type as PricingType) ?? "per-kg",
+    active: row.is_active as boolean,
+  };
 }
 
 function ServiceTypesSettings() {
-  const [services, setServices] = useState<ServiceType[]>(loadServices);
+  const [services, setServices] = useState<ServiceType[]>(DEFAULT_SERVICES);
+  const [loadingServices, setLoadingServices] = useState(true);
 
-  // Helper: update state + persist in one call
-  const updateServices = (next: ServiceType[]) => {
-    setServices(next);
-    persistServices(next);
-  };
+  useEffect(() => {
+    fetchServiceTypes().then((rows) => {
+      if (rows.length > 0) setServices(rows.map(dbRowToServiceType));
+      setLoadingServices(false);
+    });
+  }, []);
 
   // Add-new form
   const [newName, setNewName]               = useState("");
@@ -427,31 +426,28 @@ function ServiceTypesSettings() {
     setEditActive(s.active);
   };
 
-  const saveEdit = () => {
+  const saveEdit = async () => {
     if (!editTarget) return;
-    const next = services.map((s) =>
-      s.id === editTarget.id
-        ? { ...s, name: editName, description: editDesc, price: editPrice, pricingType: editPricingType, active: editActive }
-        : s
-    );
-    updateServices(next);
+    const updated = { ...editTarget, name: editName, description: editDesc, price: editPrice, pricingType: editPricingType, active: editActive };
+    setServices((prev) => prev.map((s) => s.id === editTarget.id ? updated : s));
+    await upsertServiceType({ id: editTarget.id, name: editName, description: editDesc, price: parseFloat(editPrice), pricingType: editPricingType, isActive: editActive });
     setEditTarget(null);
     showToast("Service type updated successfully!");
   };
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
     if (!newName.trim() || !newPrice.trim()) return;
-    const next = [
-      ...services,
-      { id: Date.now().toString(), name: newName.trim(), description: newDesc.trim(), price: newPrice.trim(), pricingType: newPricingType, active: true },
-    ];
-    updateServices(next);
+    const tempId = `temp-${Date.now()}`;
+    const newItem: ServiceType = { id: tempId, name: newName.trim(), description: newDesc.trim(), price: newPrice.trim(), pricingType: newPricingType, active: true };
+    setServices((prev) => [...prev, newItem]);
+    await upsertServiceType({ name: newName.trim(), description: newDesc.trim(), price: parseFloat(newPrice.trim()), pricingType: newPricingType, isActive: true });
+    // Refresh from DB to get real UUID
+    fetchServiceTypes().then((rows) => { if (rows.length > 0) setServices(rows.map(dbRowToServiceType)); });
     setNewName(""); setNewDesc(""); setNewPrice(""); setNewPricingType("per-kg");
     showToast("Service type added successfully!");
   };
 
   const handleSaveAll = () => {
-    persistServices(services);
     showToast("All service types saved successfully!");
   };
 
@@ -488,7 +484,10 @@ function ServiceTypesSettings() {
               </div>
               <Switch
                 checked={s.active}
-                onCheckedChange={(v) => updateServices(services.map((x) => x.id === s.id ? { ...x, active: v } : x))}
+                onCheckedChange={async (v) => {
+                  setServices((prev) => prev.map((x) => x.id === s.id ? { ...x, active: v } : x));
+                  await upsertServiceType({ id: s.id, name: s.name, description: s.description, price: parseFloat(s.price), pricingType: s.pricingType, isActive: v });
+                }}
               />
               <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(s)}>
                 <Edit className="w-3.5 h-3.5" />
@@ -496,7 +495,10 @@ function ServiceTypesSettings() {
               <Button
                 variant="ghost" size="icon"
                 className="h-7 w-7 text-destructive hover:text-destructive"
-                onClick={() => updateServices(services.filter((x) => x.id !== s.id))}
+                onClick={async () => {
+                  setServices((prev) => prev.filter((x) => x.id !== s.id));
+                  await deleteServiceType(s.id);
+                }}
               >
                 <Trash2 className="w-3.5 h-3.5" />
               </Button>
