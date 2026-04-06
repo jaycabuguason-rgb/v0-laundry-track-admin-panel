@@ -18,6 +18,19 @@ import {
   serviceRevenueData,
   weeklyRevenueData,
 } from "@/lib/data";
+import {
+  type ServiceType,
+  type AddOn,
+  type PricingType,
+  DEFAULT_SERVICE_TYPES,
+  DEFAULT_ADDONS,
+  loadServiceTypes,
+  persistServiceTypes,
+  loadAddOns,
+  persistAddOns,
+  loadPricingConfig,
+  persistPricingConfig,
+} from "@/lib/settings-store";
 
 // ─── Pricing ────────────────────────────────────────────────────────────────
 type PricingMode = "per-kg" | "per-load" | "both";
@@ -30,10 +43,10 @@ const DEFAULT_LOAD_TIERS = [
 ];
 
 function PricingSettings() {
-  // Base pricing
+  // Base pricing — initialised from shared store
   const [pricingMode, setPricingMode]   = useState<PricingMode>("per-kg");
-  const [pricePerKg, setPricePerKg]     = useState("30");
-  const [minWeight, setMinWeight]       = useState("");
+  const [pricePerKg, setPricePerKg]     = useState(() => loadPricingConfig().pricePerKg);
+  const [minWeight, setMinWeight]       = useState(() => loadPricingConfig().minWeight);
 
   // Load tiers
   const [loadTiers, setLoadTiers] = useState(DEFAULT_LOAD_TIERS);
@@ -47,13 +60,8 @@ function PricingSettings() {
   const [customMilestone, setCustomMilestone] = useState("10");
   const [customReward, setCustomReward]     = useState("");
 
-  // Add-ons
-  const [addOns, setAddOns] = useState([
-    { id: "1", name: "Fabcon",          rate: "10" },
-    { id: "2", name: "Express (+50%)",  rate: "50" },
-    { id: "3", name: "Bleach",          rate: "15" },
-    { id: "4", name: "Starch",          rate: "20" },
-  ]);
+  // Add-ons — initialised from shared store
+  const [addOns, setAddOns] = useState<AddOn[]>(() => loadAddOns());
   const [newName, setNewName] = useState("");
   const [newRate, setNewRate] = useState("");
 
@@ -62,7 +70,9 @@ function PricingSettings() {
 
   const addAddon = () => {
     if (!newName || !newRate) return;
-    setAddOns((prev) => [...prev, { id: Date.now().toString(), name: newName, rate: newRate }]);
+    const next: AddOn[] = [...addOns, { id: Date.now().toString(), name: newName, rate: newRate }];
+    setAddOns(next);
+    persistAddOns(next);
     setNewName(""); setNewRate("");
   };
 
@@ -312,7 +322,11 @@ function PricingSettings() {
               <div key={a.id} className="flex items-center gap-2 bg-muted/30 rounded-md px-3 py-2">
                 <span className="flex-1 text-sm text-foreground">{a.name}</span>
                 <span className="text-sm text-muted-foreground">₱{a.rate}</span>
-                <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => setAddOns((prev) => prev.filter((x) => x.id !== a.id))}>
+                <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => {
+                  const next = addOns.filter((x) => x.id !== a.id);
+                  setAddOns(next);
+                  persistAddOns(next);
+                }}>
                   <Trash2 className="w-3.5 h-3.5" />
                 </Button>
               </div>
@@ -338,7 +352,12 @@ function PricingSettings() {
         )}
         <Button
           size="sm"
-          onClick={() => { setSaved(true); setTimeout(() => setSaved(false), 3000); }}
+          onClick={() => {
+            persistPricingConfig({ pricePerKg, minWeight });
+            persistAddOns(addOns);
+            setSaved(true);
+            setTimeout(() => setSaved(false), 3000);
+          }}
           className="flex items-center gap-1.5"
         >
           <Save className="w-3.5 h-3.5" /> Save Settings
@@ -349,16 +368,6 @@ function PricingSettings() {
 }
 
 // ─── Service Types ───────────────────────────────────────────────────────────
-type PricingType = "per-kg" | "per-load" | "flat-rate";
-
-interface ServiceType {
-  id: string;
-  name: string;
-  description: string;
-  price: string;
-  pricingType: PricingType;
-  active: boolean;
-}
 
 const PRICING_TYPE_LABELS: Record<PricingType, string> = {
   "per-kg":    "Per kg",
@@ -366,35 +375,13 @@ const PRICING_TYPE_LABELS: Record<PricingType, string> = {
   "flat-rate": "Flat rate",
 };
 
-const LS_KEY = "laundrytrack_service_types";
-
-const DEFAULT_SERVICES: ServiceType[] = [
-  { id: "1", name: "Regular",           description: "Standard wash & dry",              price: "30",  pricingType: "per-kg",   active: true  },
-  { id: "2", name: "Delicate",          description: "Gentle cycle for delicate fabrics", price: "40",  pricingType: "per-kg",   active: true  },
-  { id: "3", name: "Express",           description: "Same-day turnaround",               price: "50",  pricingType: "per-kg",   active: true  },
-  { id: "4", name: "Bulk / Commercial", description: "For 10kg and above",                price: "250", pricingType: "per-load", active: false },
-];
-
-function loadServices(): ServiceType[] {
-  if (typeof window === "undefined") return DEFAULT_SERVICES;
-  try {
-    const raw = localStorage.getItem(LS_KEY);
-    if (raw) return JSON.parse(raw) as ServiceType[];
-  } catch { /* ignore */ }
-  return DEFAULT_SERVICES;
-}
-
-function persistServices(list: ServiceType[]) {
-  try { localStorage.setItem(LS_KEY, JSON.stringify(list)); } catch { /* ignore */ }
-}
-
 function ServiceTypesSettings() {
-  const [services, setServices] = useState<ServiceType[]>(loadServices);
+  const [services, setServices] = useState<ServiceType[]>(loadServiceTypes);
 
   // Helper: update state + persist in one call
   const updateServices = (next: ServiceType[]) => {
     setServices(next);
-    persistServices(next);
+    persistServiceTypes(next);
   };
 
   // Add-new form
@@ -451,7 +438,7 @@ function ServiceTypesSettings() {
   };
 
   const handleSaveAll = () => {
-    persistServices(services);
+    persistServiceTypes(services);
     showToast("All service types saved successfully!");
   };
 

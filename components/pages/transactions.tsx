@@ -26,6 +26,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { transactions as initialTxns, loyaltyMembers, statusColors, statusOrder, type Transaction, type LoyaltyMember } from "@/lib/data";
+import {
+  type ServiceType,
+  type AddOn,
+  loadServiceTypes,
+  loadAddOns,
+  loadPricingConfig,
+} from "@/lib/settings-store";
 import { cn } from "@/lib/utils";
 import { Textarea } from "@/components/ui/textarea";
 
@@ -210,8 +217,7 @@ interface WizardForm {
   washInstructions: string;
 }
 
-const WASH_TYPES = ["Regular", "Express", "Delicate"];
-const ADD_ON_OPTIONS = ["Fabcon", "Bleach", "Starch", "Express (+50%)"];
+// Wash types and add-ons are loaded dynamically from settings (see wizard state below)
 
 function NewTransactionWizard({
   open,
@@ -222,6 +228,11 @@ function NewTransactionWizard({
   onClose: () => void;
   onSubmit: (txn: Omit<Transaction, "id" | "ticketId">) => void;
 }) {
+  // Dynamic settings loaded from shared store
+  const [serviceTypes, setServiceTypes] = useState<ServiceType[]>([]);
+  const [addOnOptions, setAddOnOptions] = useState<AddOn[]>([]);
+  const [minWeight, setMinWeightSetting] = useState("0");
+
   const [step, setStep] = useState(1);
   const [form, setForm] = useState<WizardForm>({
     customerType: "walkin",
@@ -229,7 +240,7 @@ function NewTransactionWizard({
     phone: "",
     arrivalDateTime: format(new Date(), "yyyy-MM-dd HH:mm"),
     loyaltyMember: null,
-    washType: "Regular",
+    washType: "",
     weight: "",
     addOns: [],
     washInstructions: "",
@@ -242,9 +253,16 @@ function NewTransactionWizard({
   const [manualError, setManualError]       = useState("");
   const [showScanner, setShowScanner]       = useState(false);
 
-  // Reset when dialog opens
+  // Reset when dialog opens — also re-read settings so changes in Settings tab are reflected
   useEffect(() => {
     if (open) {
+      const enabledServices = loadServiceTypes().filter((s) => s.active);
+      const addOns = loadAddOns();
+      const pricingCfg = loadPricingConfig();
+      setServiceTypes(enabledServices);
+      setAddOnOptions(addOns);
+      setMinWeightSetting(pricingCfg.minWeight || "0");
+
       setStep(1);
       setForm({
         customerType: "walkin",
@@ -252,7 +270,7 @@ function NewTransactionWizard({
         phone: "",
         arrivalDateTime: format(new Date(), "yyyy-MM-dd HH:mm"),
         loyaltyMember: null,
-        washType: "Regular",
+        washType: enabledServices[0]?.name ?? "",
         weight: "",
         addOns: [],
         washInstructions: "",
@@ -300,19 +318,32 @@ function NewTransactionWizard({
   const toggleAddOn = (ao: string) =>
     setForm((f) => ({ ...f, addOns: f.addOns.includes(ao) ? f.addOns.filter((x) => x !== ao) : [...f.addOns, ao] }));
 
-  const computeFee = () => {
-    const w = parseFloat(form.weight) || 0;
-    const base = w * 30;
-    const hasExpress = form.washType === "Express" || form.addOns.includes("Express (+50%)");
-    return Math.round(base * (hasExpress ? 1.5 : 1));
-  };
+  // ── Fee calculation ────────────────────────────────────────────────────────
+  const selectedService = serviceTypes.find((s) => s.name === form.washType);
+  const pricePerUnit    = parseFloat(selectedService?.price ?? "0") || 0;
+  const weight          = parseFloat(form.weight) || 0;
+
+  const baseFee = selectedService?.pricingType === "per-load"
+    ? pricePerUnit                           // flat per-load price
+    : Math.round(weight * pricePerUnit);     // per-kg × weight
+
+  const addOnTotal = form.addOns.reduce((sum, name) => {
+    const found = addOnOptions.find((a) => a.name === name);
+    return sum + (parseFloat(found?.rate ?? "0") || 0);
+  }, 0);
+
+  const totalFee = baseFee + addOnTotal;
+
+  const computeFee = () => totalFee;
 
   const step1Valid =
     form.customerType === "walkin"
       ? form.customerName.trim().length > 0
       : form.loyaltyMember !== null;
 
-  const step2Valid = form.washType && parseFloat(form.weight) > 0;
+  const minWeightNum = parseFloat(minWeight) || 0;
+  const isPerLoad = selectedService?.pricingType === "per-load";
+  const step2Valid = form.washType && (isPerLoad || (weight > 0 && weight >= minWeightNum));
 
   const handleSubmit = () => {
     const fee = computeFee();
@@ -501,84 +532,151 @@ function NewTransactionWizard({
   );
 
   // ── Step 2: Service Details ───────────────────────────────────────────────
-  const renderStep2 = () => (
-    <div className="space-y-4">
-      <div>
-        <label className="text-xs font-medium text-foreground block mb-1.5">
-          Wash Type <span className="text-destructive">*</span>
-        </label>
-        <div className="grid grid-cols-3 gap-2">
-          {WASH_TYPES.map((wt) => (
-            <button
-              key={wt}
-              onClick={() => setForm((f) => ({ ...f, washType: wt }))}
-              className={cn(
-                "rounded-lg border-2 py-2.5 text-sm font-medium transition-all cursor-pointer",
-                form.washType === wt
-                  ? "border-primary bg-primary/5 text-primary"
-                  : "border-border bg-background hover:border-primary/40 text-foreground"
+  const renderStep2 = () => {
+    const cols = serviceTypes.length <= 2 ? serviceTypes.length : serviceTypes.length === 4 ? 2 : 3;
+    const isPerkgService = selectedService?.pricingType !== "per-load";
+
+    return (
+      <div className="space-y-4">
+        {/* Wash Type — dynamic from Settings → Service Types */}
+        <div>
+          <label className="text-xs font-medium text-foreground block mb-1.5">
+            Wash Type <span className="text-destructive">*</span>
+          </label>
+          {serviceTypes.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-xs text-muted-foreground">
+              No service types are enabled. Go to Settings → Service Types to enable at least one.
+            </div>
+          ) : (
+            <div className={cn("grid gap-2", cols === 2 ? "grid-cols-2" : "grid-cols-3")}>
+              {serviceTypes.map((svc) => (
+                <button
+                  key={svc.id}
+                  onClick={() => setForm((f) => ({ ...f, washType: svc.name }))}
+                  className={cn(
+                    "rounded-lg border-2 py-2.5 px-3 text-sm font-medium transition-all cursor-pointer flex flex-col items-center gap-0.5",
+                    form.washType === svc.name
+                      ? "border-primary bg-primary/5 text-primary"
+                      : "border-border bg-background hover:border-primary/40 text-foreground"
+                  )}
+                >
+                  <span>{svc.name}</span>
+                  <span className={cn(
+                    "text-[11px] font-normal",
+                    form.washType === svc.name ? "text-primary/70" : "text-muted-foreground"
+                  )}>
+                    ₱{svc.price}/{svc.pricingType === "per-load" ? "load" : "kg"}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Weight — only shown for per-kg services */}
+        {isPerkgService && (
+          <div>
+            <label className="text-xs font-medium text-foreground block mb-1.5">
+              Weight (kg) <span className="text-destructive">*</span>
+              {minWeightNum > 0 && (
+                <span className="ml-1 text-muted-foreground font-normal">(min. {minWeightNum} kg)</span>
               )}
-            >
-              {wt}
-            </button>
-          ))}
+            </label>
+            <Input
+              type="number"
+              min={minWeightNum > 0 ? minWeightNum : 0.5}
+              step="0.1"
+              placeholder={minWeightNum > 0 ? `Min. ${minWeightNum} kg` : "e.g. 5.0"}
+              value={form.weight}
+              onChange={(e) => setForm((f) => ({ ...f, weight: e.target.value }))}
+              className="h-9 text-sm"
+            />
+            {minWeightNum > 0 && weight > 0 && weight < minWeightNum && (
+              <p className="text-xs text-destructive mt-1">
+                Weight must be at least {minWeightNum} kg
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Add-ons — dynamic from Settings → Pricing → Add-on Rates */}
+        {addOnOptions.length > 0 && (
+          <div>
+            <label className="text-xs font-medium text-foreground block mb-1.5">Add-ons</label>
+            <div className="flex flex-wrap gap-2">
+              {addOnOptions.map((ao) => (
+                <button
+                  key={ao.id}
+                  onClick={() => toggleAddOn(ao.name)}
+                  className={cn(
+                    "px-3 py-1.5 rounded-full border text-xs font-medium transition-all cursor-pointer",
+                    form.addOns.includes(ao.name)
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "bg-background border-border text-foreground hover:border-primary/40"
+                  )}
+                >
+                  {form.addOns.includes(ao.name) && <Check className="w-3 h-3 inline mr-1" />}
+                  {ao.name}
+                  <span className="ml-1 opacity-70">+₱{ao.rate}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Wash Instructions */}
+        <div>
+          <label className="text-xs font-medium text-foreground block mb-1.5">Wash Instructions</label>
+          <Textarea
+            placeholder="Special instructions…"
+            value={form.washInstructions}
+            onChange={(e) => setForm((f) => ({ ...f, washInstructions: e.target.value }))}
+            className="text-sm resize-none"
+            rows={2}
+          />
         </div>
-      </div>
 
-      <div>
-        <label className="text-xs font-medium text-foreground block mb-1.5">
-          Weight (kg) <span className="text-destructive">*</span>
-        </label>
-        <Input
-          type="number"
-          min="0.5"
-          step="0.1"
-          placeholder="e.g. 5.0"
-          value={form.weight}
-          onChange={(e) => setForm((f) => ({ ...f, weight: e.target.value }))}
-          className="h-9 text-sm"
-        />
-      </div>
-
-      <div>
-        <label className="text-xs font-medium text-foreground block mb-1.5">Add-ons</label>
-        <div className="flex flex-wrap gap-2">
-          {ADD_ON_OPTIONS.map((ao) => (
-            <button
-              key={ao}
-              onClick={() => toggleAddOn(ao)}
-              className={cn(
-                "px-3 py-1.5 rounded-full border text-xs font-medium transition-all cursor-pointer",
-                form.addOns.includes(ao)
-                  ? "bg-primary text-primary-foreground border-primary"
-                  : "bg-background border-border text-foreground hover:border-primary/40"
+        {/* Live fee calculator */}
+        {(weight > 0 || selectedService?.pricingType === "per-load") && form.washType && (
+          <div className="bg-primary/5 border border-primary/20 rounded-lg px-4 py-3 space-y-2">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Fee Breakdown</p>
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">
+                  Base fee
+                  {isPerkgService && weight > 0 && (
+                    <span className="text-xs ml-1 text-muted-foreground/70">
+                      ({weight} kg × ₱{selectedService?.price})
+                    </span>
+                  )}
+                </span>
+                <span className="font-medium text-foreground">₱{baseFee}</span>
+              </div>
+              {form.addOns.map((name) => {
+                const ao = addOnOptions.find((a) => a.name === name);
+                return ao ? (
+                  <div key={name} className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">{name}</span>
+                    <span className="font-medium text-foreground">+₱{ao.rate}</span>
+                  </div>
+                ) : null;
+              })}
+              {form.addOns.length > 0 && (
+                <div className="flex items-center justify-between text-xs text-muted-foreground pt-0.5 border-t border-primary/10">
+                  <span>Add-ons total</span>
+                  <span>+₱{addOnTotal}</span>
+                </div>
               )}
-            >
-              {form.addOns.includes(ao) && <Check className="w-3 h-3 inline mr-1" />}{ao}
-            </button>
-          ))}
-        </div>
+            </div>
+            <div className="flex items-center justify-between border-t border-primary/20 pt-2">
+              <span className="text-sm font-semibold">Total</span>
+              <span className="text-lg font-bold text-primary">₱{totalFee}</span>
+            </div>
+          </div>
+        )}
       </div>
-
-      <div>
-        <label className="text-xs font-medium text-foreground block mb-1.5">Wash Instructions</label>
-        <Textarea
-          placeholder="Special instructions…"
-          value={form.washInstructions}
-          onChange={(e) => setForm((f) => ({ ...f, washInstructions: e.target.value }))}
-          className="text-sm resize-none"
-          rows={2}
-        />
-      </div>
-
-      {parseFloat(form.weight) > 0 && (
-        <div className="bg-primary/5 border border-primary/20 rounded-lg px-4 py-3 flex items-center justify-between">
-          <span className="text-sm text-muted-foreground">Estimated Fee</span>
-          <span className="text-lg font-bold text-primary">₱{computeFee()}</span>
-        </div>
-      )}
-    </div>
-  );
+    );
+  };
 
   // ── Step 3: Summary & Receipt ─────────────────────────────────────────────
   const renderStep3 = () => {
