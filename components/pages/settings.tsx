@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Trash2, Edit, Save, Upload, Clock, Download, Loader2, CheckCircle2 } from "lucide-react";
+import { Plus, Trash2, Edit, Save, Upload, Clock, Download, Loader2, CheckCircle2, Scale, ShoppingBasket, Package, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -17,17 +17,44 @@ import {
 } from "@/lib/data";
 
 // ─── Pricing ────────────────────────────────────────────────────────────────
+type PricingMode = "per-kg" | "per-load" | "both";
+
+const DEFAULT_LOAD_TIERS = [
+  { id: "1", name: "Small Load",          range: "below 4 kg",    price: "80"  },
+  { id: "2", name: "Medium Load",         range: "4 kg – 7 kg",   price: "120" },
+  { id: "3", name: "Large Load",          range: "7 kg – 10 kg",  price: "180" },
+  { id: "4", name: "Bulk / Commercial",   range: "10 kg+",        price: "250" },
+];
+
 function PricingSettings() {
-  const [pricePerKg, setPricePerKg] = useState("30");
-  const [milestone, setMilestone] = useState("7");
+  // Base pricing
+  const [pricingMode, setPricingMode]   = useState<PricingMode>("per-kg");
+  const [pricePerKg, setPricePerKg]     = useState("30");
+  const [minWeight, setMinWeight]       = useState("");
+
+  // Load tiers
+  const [loadTiers, setLoadTiers] = useState(DEFAULT_LOAD_TIERS);
+  const [showAddTier, setShowAddTier]   = useState(false);
+  const [newTierName, setNewTierName]   = useState("");
+  const [newTierRange, setNewTierRange] = useState("");
+  const [newTierPrice, setNewTierPrice] = useState("");
+
+  // Loyalty
+  const [milestone, setMilestone]           = useState("7");
+  const [customMilestone, setCustomMilestone] = useState("10");
+  const [customReward, setCustomReward]     = useState("");
+
+  // Add-ons
   const [addOns, setAddOns] = useState([
-    { id: "1", name: "Fabcon", rate: "10" },
-    { id: "2", name: "Express (+50%)", rate: "50" },
-    { id: "3", name: "Bleach", rate: "15" },
-    { id: "4", name: "Starch", rate: "20" },
+    { id: "1", name: "Fabcon",          rate: "10" },
+    { id: "2", name: "Express (+50%)",  rate: "50" },
+    { id: "3", name: "Bleach",          rate: "15" },
+    { id: "4", name: "Starch",          rate: "20" },
   ]);
   const [newName, setNewName] = useState("");
   const [newRate, setNewRate] = useState("");
+
+  // Save state
   const [saved, setSaved] = useState(false);
 
   const addAddon = () => {
@@ -36,29 +63,242 @@ function PricingSettings() {
     setNewName(""); setNewRate("");
   };
 
+  const addTier = () => {
+    if (!newTierName || !newTierPrice) return;
+    setLoadTiers((prev) => [...prev, { id: Date.now().toString(), name: newTierName, range: newTierRange, price: newTierPrice }]);
+    setNewTierName(""); setNewTierRange(""); setNewTierPrice("");
+    setShowAddTier(false);
+  };
+
+  const showKg   = pricingMode === "per-kg"   || pricingMode === "both";
+  const showLoad = pricingMode === "per-load" || pricingMode === "both";
+
+  const MODES: { value: PricingMode; icon: React.ReactNode; label: string; sub: string }[] = [
+    { value: "per-kg",   icon: <Scale className="w-4 h-4" />,          label: "Per Kilogram", sub: "Charge by weight"     },
+    { value: "per-load", icon: <ShoppingBasket className="w-4 h-4" />, label: "Per Load",     sub: "Flat rate per load"   },
+    { value: "both",     icon: <Package className="w-4 h-4" />,        label: "Both",         sub: "Staff selects at time of transaction" },
+  ];
+
   return (
     <div className="space-y-5 w-full max-w-xl">
+
+      {/* ── Base Pricing ─────────────────────────────────────────────────── */}
       <Card className="border border-border shadow-none">
         <CardHeader className="pb-3">
           <CardTitle className="text-sm">Base Pricing</CardTitle>
-          <CardDescription className="text-xs">Set the base rate per kilogram of laundry.</CardDescription>
+          <CardDescription className="text-xs">Configure how laundry is charged to customers.</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="flex items-center gap-3">
-            <Label className="text-sm w-32 shrink-0">Price per kg (₱)</Label>
-            <Input value={pricePerKg} onChange={(e) => setPricePerKg(e.target.value)} className="w-32 h-9 text-sm" />
-          </div>
-          <div className="flex items-center gap-3">
-            <Label className="text-sm w-32 shrink-0">Loyalty Milestone</Label>
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">Every</span>
-              <Input value={milestone} onChange={(e) => setMilestone(e.target.value)} className="w-16 h-9 text-sm text-center" />
-              <span className="text-sm text-muted-foreground">visits = free wash</span>
+        <CardContent className="space-y-5">
+
+          {/* Pricing Mode toggle */}
+          <div className="space-y-2">
+            <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Pricing Mode</Label>
+            <div className="grid grid-cols-3 gap-2">
+              {MODES.map(({ value, icon, label, sub }) => (
+                <button
+                  key={value}
+                  onClick={() => setPricingMode(value)}
+                  className={[
+                    "flex flex-col items-center gap-1.5 rounded-xl border-2 px-3 py-3 text-center transition-all cursor-pointer",
+                    pricingMode === value
+                      ? "border-primary bg-primary/5 shadow-sm"
+                      : "border-border bg-background hover:border-primary/40 hover:bg-muted/20",
+                  ].join(" ")}
+                >
+                  <div className={[
+                    "w-8 h-8 rounded-full flex items-center justify-center",
+                    pricingMode === value ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground",
+                  ].join(" ")}>
+                    {icon}
+                  </div>
+                  <p className={["text-xs font-semibold leading-tight", pricingMode === value ? "text-primary" : "text-foreground"].join(" ")}>
+                    {label}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground leading-tight">{sub}</p>
+                </button>
+              ))}
             </div>
+          </div>
+
+          {/* Per Kilogram fields */}
+          {showKg && (
+            <div className="space-y-3 pt-1">
+              {pricingMode === "both" && (
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Per Kilogram</p>
+              )}
+              <div className="flex items-center gap-3">
+                <Label className="text-sm w-36 shrink-0">Price per kg (₱)</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  value={pricePerKg}
+                  onChange={(e) => setPricePerKg(e.target.value)}
+                  className="w-28 h-9 text-sm"
+                />
+              </div>
+              <div className="flex items-center gap-3">
+                <Label className="text-sm w-36 shrink-0">Minimum weight (kg)</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  placeholder="e.g. 3 kg minimum"
+                  value={minWeight}
+                  onChange={(e) => setMinWeight(e.target.value)}
+                  className="w-28 h-9 text-sm"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Per Load tier table */}
+          {showLoad && (
+            <div className="space-y-3 pt-1">
+              {pricingMode === "both" && (
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Per Load Tiers</p>
+              )}
+              {pricingMode === "per-load" && (
+                <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block">Load Pricing Tiers</Label>
+              )}
+              <div className="rounded-lg border border-border overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-muted/40 border-b border-border">
+                      <th className="text-left px-3 py-2 text-xs font-semibold text-muted-foreground">Load Size</th>
+                      <th className="text-left px-3 py-2 text-xs font-semibold text-muted-foreground">Weight Range</th>
+                      <th className="text-left px-3 py-2 text-xs font-semibold text-muted-foreground">Price (₱)</th>
+                      <th className="w-8" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {loadTiers.map((tier) => (
+                      <tr key={tier.id} className="border-b border-border last:border-0 hover:bg-muted/20 transition-colors">
+                        <td className="px-3 py-2 text-sm font-medium text-foreground">{tier.name}</td>
+                        <td className="px-3 py-2 text-xs text-muted-foreground">{tier.range}</td>
+                        <td className="px-3 py-2">
+                          <div className="flex items-center gap-1">
+                            <span className="text-xs text-muted-foreground">₱</span>
+                            <Input
+                              type="number"
+                              min="0"
+                              value={tier.price}
+                              onChange={(e) =>
+                                setLoadTiers((prev) =>
+                                  prev.map((t) => t.id === tier.id ? { ...t, price: e.target.value } : t)
+                                )
+                              }
+                              className="w-20 h-7 text-sm"
+                            />
+                          </div>
+                        </td>
+                        <td className="px-2 py-2">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                            onClick={() => setLoadTiers((prev) => prev.filter((t) => t.id !== tier.id))}
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Add custom tier */}
+              {showAddTier ? (
+                <div className="bg-muted/30 rounded-lg border border-border p-3 space-y-2">
+                  <p className="text-xs font-medium text-foreground">New Custom Tier</p>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div>
+                      <Label className="text-[10px] text-muted-foreground mb-1 block">Tier Name</Label>
+                      <Input placeholder="e.g. Extra Large" value={newTierName} onChange={(e) => setNewTierName(e.target.value)} className="h-8 text-xs" />
+                    </div>
+                    <div>
+                      <Label className="text-[10px] text-muted-foreground mb-1 block">Weight Range</Label>
+                      <Input placeholder="e.g. 10kg – 15kg" value={newTierRange} onChange={(e) => setNewTierRange(e.target.value)} className="h-8 text-xs" />
+                    </div>
+                    <div>
+                      <Label className="text-[10px] text-muted-foreground mb-1 block">Price (₱)</Label>
+                      <Input type="number" placeholder="e.g. 300" value={newTierPrice} onChange={(e) => setNewTierPrice(e.target.value)} className="h-8 text-xs" />
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button size="sm" className="h-7 text-xs" onClick={addTier} disabled={!newTierName || !newTierPrice}>
+                      Save Tier
+                    </Button>
+                    <Button size="sm" variant="ghost" className="h-7 text-xs gap-1" onClick={() => { setShowAddTier(false); setNewTierName(""); setNewTierRange(""); setNewTierPrice(""); }}>
+                      <X className="w-3 h-3" /> Cancel
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <Button size="sm" variant="outline" className="h-8 text-xs gap-1.5" onClick={() => setShowAddTier(true)}>
+                  <Plus className="w-3.5 h-3.5" /> Add Custom Tier
+                </Button>
+              )}
+            </div>
+          )}
+
+          {/* Both mode note */}
+          {pricingMode === "both" && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg px-3 py-2.5 text-xs text-blue-800">
+              Staff will select the pricing type when creating a new transaction.
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* ── Loyalty Milestone ────────────────────────────────────────────── */}
+      <Card className="border border-border shadow-none">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm">Loyalty Rewards</CardTitle>
+          <CardDescription className="text-xs">Configure visit milestones and what customers earn.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Reward 1 — free wash */}
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Reward 1 — Stamp Card</Label>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground shrink-0">Every</span>
+              <Input
+                type="number"
+                min="1"
+                value={milestone}
+                onChange={(e) => setMilestone(e.target.value)}
+                className="w-16 h-9 text-sm text-center"
+              />
+              <span className="text-sm text-muted-foreground shrink-0">visits = free wash</span>
+            </div>
+          </div>
+
+          {/* Reward 2 — custom */}
+          <div className="space-y-2 pt-1 border-t border-border">
+            <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Reward 2 — Custom Milestone</Label>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-sm text-muted-foreground shrink-0">Every</span>
+              <Input
+                type="number"
+                min="1"
+                value={customMilestone}
+                onChange={(e) => setCustomMilestone(e.target.value)}
+                className="w-16 h-9 text-sm text-center"
+              />
+              <span className="text-sm text-muted-foreground shrink-0">visits =</span>
+              <Input
+                placeholder="e.g. free load, 50% discount, free fabcon"
+                value={customReward}
+                onChange={(e) => setCustomReward(e.target.value)}
+                className="flex-1 min-w-48 h-9 text-sm"
+              />
+            </div>
+            <p className="text-[11px] text-muted-foreground">Leave blank to disable the custom milestone reward.</p>
           </div>
         </CardContent>
       </Card>
 
+      {/* ── Add-on Rates ─────────────────────────────────────────────────── */}
       <Card className="border border-border shadow-none">
         <CardHeader className="pb-3">
           <CardTitle className="text-sm">Add-on Rates</CardTitle>
@@ -85,9 +325,22 @@ function PricingSettings() {
         </CardContent>
       </Card>
 
-      <Button size="sm" onClick={() => { setSaved(true); setTimeout(() => setSaved(false), 2000); }} className="flex items-center gap-1.5">
-        <Save className="w-3.5 h-3.5" /> {saved ? "Saved!" : "Save Changes"}
-      </Button>
+      {/* ── Save ─────────────────────────────────────────────────────────── */}
+      <div>
+        {saved && (
+          <div className="flex items-center gap-2 text-green-700 bg-green-50 border border-green-200 rounded-lg px-4 py-2.5 text-sm mb-3 animate-in fade-in slide-in-from-top-1">
+            <CheckCircle2 className="w-4 h-4 shrink-0" />
+            Pricing settings saved!
+          </div>
+        )}
+        <Button
+          size="sm"
+          onClick={() => { setSaved(true); setTimeout(() => setSaved(false), 3000); }}
+          className="flex items-center gap-1.5"
+        >
+          <Save className="w-3.5 h-3.5" /> Save Settings
+        </Button>
+      </div>
     </div>
   );
 }
