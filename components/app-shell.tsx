@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { createClient } from "@/lib/supabase/client";
 import Sidebar, { type Page } from "@/components/sidebar";
 import TopNav from "@/components/topnav";
 import DashboardPage from "@/components/pages/dashboard";
@@ -24,12 +23,6 @@ interface AppShellProps {
 export default function AppShell({ onSignOut, adminProfile, onProfileUpdate }: AppShellProps) {
   const [activePage, setActivePage] = useState<Page>("dashboard");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-
-  const handleSignOut = async () => {
-    const supabase = createClient();
-    await supabase.auth.signOut();
-    onSignOut();
-  };
 
   const renderPage = () => {
     switch (activePage) {
@@ -81,7 +74,7 @@ export default function AppShell({ onSignOut, adminProfile, onProfileUpdate }: A
         <TopNav
           activePage={activePage}
           onNavigate={handleNavigate}
-          onSignOut={handleSignOut}
+          onSignOut={onSignOut}
           adminProfile={adminProfile}
           onMenuToggle={() => setMobileMenuOpen((v) => !v)}
         />
