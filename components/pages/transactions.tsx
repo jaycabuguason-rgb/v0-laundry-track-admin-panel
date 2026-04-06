@@ -745,6 +745,7 @@ export default function TransactionsPage() {
   const [viewTxn, setViewTxn]         = useState<Transaction | null>(null);
   const [editTxn, setEditTxn]         = useState<Transaction | null>(null);
   const [editInstructions, setEditInstructions] = useState("");
+  const [editStatus, setEditStatus]   = useState<Transaction["status"]>("Received");
   const [voidTxn, setVoidTxn]         = useState<Transaction | null>(null);
   const [voidReason, setVoidReason]   = useState("");
   const [reprintTxn, setReprintTxn]   = useState<Transaction | null>(null);
@@ -809,16 +810,27 @@ export default function TransactionsPage() {
   const saveInstructions = () => {
     if (!editTxn) return;
     const updated = txns.map((t) =>
-      t.id === editTxn.id ? { ...t, washInstructions: editInstructions } : t
+      t.id === editTxn.id ? { ...t, status: editStatus, washInstructions: editInstructions } : t
     );
-    commit(updated, `Edit instructions ${editTxn.ticketId}`);
-    showToast(`Ticket #${editTxn.ticketId} updated`);
+    commit(updated, `Edit ${editTxn.ticketId}`);
+    showToast(`Ticket #${editTxn.ticketId} updated successfully`);
+    setEditTxn(null);
+  };
+
+  const markAsClaimed = () => {
+    if (!editTxn) return;
+    const updated = txns.map((t) =>
+      t.id === editTxn.id ? { ...t, status: "Claimed" as const, washInstructions: editInstructions } : t
+    );
+    commit(updated, `Claimed ${editTxn.ticketId}`);
+    showToast(`Ticket #${editTxn.ticketId} marked as Claimed`);
     setEditTxn(null);
   };
 
   const openEdit = (txn: Transaction) => {
     setEditTxn(txn);
     setEditInstructions(txn.washInstructions || "");
+    setEditStatus(txn.status);
   };
 
   const handleNewTransaction = (partial: Omit<Transaction, "id" | "ticketId">) => {
@@ -839,7 +851,7 @@ export default function TransactionsPage() {
     return matchSearch && matchStatus && matchDate;
   });
 
-  const editStepIndex = editTxn ? statusOrder.indexOf(editTxn.status as (typeof statusOrder)[number]) : -1;
+
   const canUndo = historyIdx >= 0;
   const canRedo = historyIdx < history.length - 1;
 
@@ -1127,32 +1139,33 @@ export default function TransactionsPage() {
                 ))}
               </div>
 
-              {/* Status stepper — interactive */}
+              {/* Status dropdown */}
               <div>
-                <p className="text-xs font-semibold text-muted-foreground mb-3 uppercase tracking-wider">Status Progress</p>
-                <div className="flex items-center">
-                  {statusOrder.map((step, idx) => {
-                    const isCompleted = idx < editStepIndex;
-                    const isCurrent   = idx === editStepIndex;
-                    const isLast      = idx === statusOrder.length - 1;
-                    return (
-                      <div key={step} className="flex items-center flex-1 last:flex-none">
-                        <div className="flex flex-col items-center">
-                          <div className={cn(
-                            "w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold border-2",
-                            isCompleted || isCurrent ? "bg-primary border-primary text-primary-foreground" : "bg-background border-border text-muted-foreground"
-                          )}>
-                            {isCompleted ? "✓" : idx + 1}
-                          </div>
-                          <span className={cn("text-[9px] mt-1 text-center w-10 md:w-12 leading-tight", isCurrent ? "text-primary font-semibold" : "text-muted-foreground")}>
-                            {step}
-                          </span>
+                <label className="text-xs font-medium text-foreground mb-1.5 block">Current Status</label>
+                <Select
+                  value={editStatus}
+                  onValueChange={(v) => setEditStatus(v as Transaction["status"])}
+                >
+                  <SelectTrigger className="h-9 text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {([
+                      { value: "Received", dot: "bg-blue-500",   text: "text-blue-700"   },
+                      { value: "Washing",  dot: "bg-yellow-500", text: "text-yellow-700" },
+                      { value: "Drying",   dot: "bg-orange-500", text: "text-orange-700" },
+                      { value: "Ready",    dot: "bg-green-500",  text: "text-green-700"  },
+                      { value: "Claimed",  dot: "bg-gray-400",   text: "text-gray-600"   },
+                    ] as const).map(({ value, dot, text }) => (
+                      <SelectItem key={value} value={value}>
+                        <div className="flex items-center gap-2">
+                          <span className={cn("w-2 h-2 rounded-full shrink-0", dot)} />
+                          <span className={cn("font-medium text-xs", text)}>{value}</span>
                         </div>
-                        {!isLast && <div className={cn("flex-1 h-0.5 mb-4 mx-0.5", isCompleted ? "bg-primary" : "bg-border")} />}
-                      </div>
-                    );
-                  })}
-                </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               {/* Wash instructions */}
@@ -1169,10 +1182,10 @@ export default function TransactionsPage() {
 
               {/* Edit actions */}
               <div className="flex flex-col sm:flex-row gap-2 pt-1">
-                {editStepIndex >= 0 && editStepIndex < statusOrder.length - 1 && (
-                  <Button size="sm" onClick={moveToNextStatus} className="flex-1 gap-1.5">
-                    <ChevronRight className="w-3.5 h-3.5" />
-                    Move to {statusOrder[editStepIndex + 1]}
+                {editStatus === "Ready" && (
+                  <Button size="sm" onClick={markAsClaimed} className="flex-1 gap-1.5">
+                    <Check className="w-3.5 h-3.5" />
+                    Move to Claimed
                   </Button>
                 )}
                 <Button size="sm" variant="secondary" onClick={saveInstructions} className="flex-1">
