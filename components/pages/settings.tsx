@@ -1,13 +1,20 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Trash2, Edit, Save, Upload, Clock } from "lucide-react";
+import { Plus, Trash2, Edit, Save, Upload, Clock, Download, Loader2, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { type Page } from "@/components/sidebar";
+import {
+  transactions,
+  loyaltyMembers,
+  auditLogs,
+  serviceRevenueData,
+  weeklyRevenueData,
+} from "@/lib/data";
 
 // ─── Pricing ────────────────────────────────────────────────────────────────
 function PricingSettings() {
@@ -177,23 +184,138 @@ function BusinessProfileSettings() {
 
 // ─── Backup & Restore ────────────────────────────────────────────────────────
 function BackupSettings() {
-  const [autoBackup, setAutoBackup] = useState(true);
-  const [schedule, setSchedule] = useState<"daily" | "weekly">("daily");
+  const [autoBackup, setAutoBackup]   = useState(true);
+  const [schedule, setSchedule]       = useState<"daily" | "weekly">("daily");
+  const [exporting, setExporting]     = useState(false);
+  const [lastBackup, setLastBackup]   = useState<Date | null>(null);
+  const [justExported, setJustExported] = useState(false);
+
+  const formatBackupDate = (d: Date) =>
+    d.toLocaleDateString("en-PH", { year: "numeric", month: "long", day: "numeric" }) +
+    ", " +
+    d.toLocaleTimeString("en-PH", { hour: "2-digit", minute: "2-digit", hour12: true });
+
+  const handleExport = async () => {
+    if (exporting) return;
+    setExporting(true);
+
+    // Brief artificial delay so the loading state is visible
+    await new Promise((r) => setTimeout(r, 800));
+
+    const now = new Date();
+
+    // Build full backup payload from all data sources
+    const backup = {
+      meta: {
+        appName: "LaundryTrack",
+        version: "1.0",
+        exportedAt: now.toISOString(),
+        exportedBy: "Admin",
+      },
+      settings: {
+        pricing: {
+          pricePerKg: 30,
+          loyaltyMilestone: 7,
+          addOns: [
+            { name: "Fabcon",        rate: 10 },
+            { name: "Express (+50%)", rate: 50 },
+            { name: "Bleach",        rate: 15 },
+            { name: "Starch",        rate: 20 },
+          ],
+        },
+        serviceTypes: [
+          { name: "Regular",         description: "Standard wash & dry",              active: true },
+          { name: "Delicate",        description: "Gentle cycle for delicate fabrics", active: true },
+          { name: "Express",         description: "Same-day turnaround",               active: true },
+          { name: "Bulk / Commercial", description: "For 10kg and above",             active: false },
+        ],
+        businessProfile: {
+          shopName:      "LaundryTrack",
+          address:       "123 Magsaysay Ave, Brgy. Sta. Cruz, Manila",
+          contactNumber: "(02) 8123-4567",
+          email:         "contact@laundrytrack.ph",
+        },
+        backup: {
+          autoBackup: true,
+          schedule:   "daily",
+        },
+      },
+      data: {
+        transactions,
+        loyaltyMembers,
+        auditLogs,
+        analytics: {
+          serviceRevenue:  serviceRevenueData,
+          weeklyRevenue:   weeklyRevenueData,
+        },
+      },
+    };
+
+    // Serialise and trigger download
+    const json     = JSON.stringify(backup, null, 2);
+    const blob     = new Blob([json], { type: "application/json" });
+    const url      = URL.createObjectURL(blob);
+    const pad      = (n: number) => String(n).padStart(2, "0");
+    const datePart = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}`;
+    const timePart = `${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+    const fileName = `LaundryTrack_Backup_${datePart}_${timePart}.json`;
+    const a        = document.createElement("a");
+    a.href         = url;
+    a.download     = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    setLastBackup(now);
+    setExporting(false);
+    setJustExported(true);
+    setTimeout(() => setJustExported(false), 3000);
+  };
 
   return (
     <div className="space-y-4 w-full max-w-lg">
+      {/* Success toast */}
+      {justExported && (
+        <div className="flex items-center gap-2.5 bg-green-50 border border-green-200 text-green-800 rounded-lg px-4 py-3 text-sm animate-in fade-in slide-in-from-top-2">
+          <CheckCircle2 className="w-4 h-4 shrink-0 text-green-600" />
+          Backup exported successfully!
+        </div>
+      )}
+
       <Card className="border border-border shadow-none">
         <CardHeader className="pb-3">
           <CardTitle className="text-sm">Manual Backup</CardTitle>
           <CardDescription className="text-xs">Download a snapshot of all system data.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
-          <div className="flex items-center gap-3 bg-muted/30 rounded-md p-3 text-sm">
-            <Clock className="w-4 h-4 text-muted-foreground" />
-            <span className="text-muted-foreground text-xs">Last backup: <strong className="text-foreground">April 4, 2026, 11:00 PM</strong></span>
+          <div className="flex items-center gap-3 bg-muted/30 rounded-md p-3">
+            <Clock className="w-4 h-4 text-muted-foreground shrink-0" />
+            <span className="text-xs text-muted-foreground">
+              Last backup:{" "}
+              <strong className="text-foreground">
+                {lastBackup ? formatBackupDate(lastBackup) : "April 4, 2026, 11:00 PM"}
+              </strong>
+            </span>
           </div>
-          <Button size="sm" variant="outline" className="flex items-center gap-1.5">
-            <Upload className="w-3.5 h-3.5 rotate-180" /> Export Database Backup
+          <Button
+            size="sm"
+            variant="outline"
+            className="flex items-center gap-1.5"
+            onClick={handleExport}
+            disabled={exporting}
+          >
+            {exporting ? (
+              <>
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                Exporting...
+              </>
+            ) : (
+              <>
+                <Download className="w-3.5 h-3.5" />
+                Export Database Backup
+              </>
+            )}
           </Button>
         </CardContent>
       </Card>
@@ -237,7 +359,7 @@ function BackupSettings() {
           <div className="border-2 border-dashed border-border rounded-lg p-6 flex flex-col items-center gap-2">
             <Upload className="w-6 h-6 text-muted-foreground" />
             <p className="text-xs text-muted-foreground">Click to upload backup file</p>
-            <p className="text-[11px] text-muted-foreground/60">.json, .sql files accepted</p>
+            <p className="text-[11px] text-muted-foreground/60">.json files accepted</p>
           </div>
           <Button size="sm" variant="destructive" className="mt-3 flex items-center gap-1.5">
             Restore Database
