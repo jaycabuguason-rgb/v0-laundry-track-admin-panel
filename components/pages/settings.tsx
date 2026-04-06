@@ -366,13 +366,36 @@ const PRICING_TYPE_LABELS: Record<PricingType, string> = {
   "flat-rate": "Flat rate",
 };
 
+const LS_KEY = "laundrytrack_service_types";
+
+const DEFAULT_SERVICES: ServiceType[] = [
+  { id: "1", name: "Regular",           description: "Standard wash & dry",              price: "30",  pricingType: "per-kg",   active: true  },
+  { id: "2", name: "Delicate",          description: "Gentle cycle for delicate fabrics", price: "40",  pricingType: "per-kg",   active: true  },
+  { id: "3", name: "Express",           description: "Same-day turnaround",               price: "50",  pricingType: "per-kg",   active: true  },
+  { id: "4", name: "Bulk / Commercial", description: "For 10kg and above",                price: "250", pricingType: "per-load", active: false },
+];
+
+function loadServices(): ServiceType[] {
+  if (typeof window === "undefined") return DEFAULT_SERVICES;
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    if (raw) return JSON.parse(raw) as ServiceType[];
+  } catch { /* ignore */ }
+  return DEFAULT_SERVICES;
+}
+
+function persistServices(list: ServiceType[]) {
+  try { localStorage.setItem(LS_KEY, JSON.stringify(list)); } catch { /* ignore */ }
+}
+
 function ServiceTypesSettings() {
-  const [services, setServices] = useState<ServiceType[]>([
-    { id: "1", name: "Regular",           description: "Standard wash & dry",              price: "30",  pricingType: "per-kg",    active: true  },
-    { id: "2", name: "Delicate",          description: "Gentle cycle for delicate fabrics", price: "40",  pricingType: "per-kg",    active: true  },
-    { id: "3", name: "Express",           description: "Same-day turnaround",               price: "50",  pricingType: "per-kg",    active: true  },
-    { id: "4", name: "Bulk / Commercial", description: "For 10kg and above",                price: "250", pricingType: "per-load",  active: false },
-  ]);
+  const [services, setServices] = useState<ServiceType[]>(loadServices);
+
+  // Helper: update state + persist in one call
+  const updateServices = (next: ServiceType[]) => {
+    setServices(next);
+    persistServices(next);
+  };
 
   // Add-new form
   const [newName, setNewName]               = useState("");
@@ -406,28 +429,31 @@ function ServiceTypesSettings() {
 
   const saveEdit = () => {
     if (!editTarget) return;
-    setServices((prev) =>
-      prev.map((s) =>
-        s.id === editTarget.id
-          ? { ...s, name: editName, description: editDesc, price: editPrice, pricingType: editPricingType, active: editActive }
-          : s
-      )
+    const next = services.map((s) =>
+      s.id === editTarget.id
+        ? { ...s, name: editName, description: editDesc, price: editPrice, pricingType: editPricingType, active: editActive }
+        : s
     );
+    updateServices(next);
     setEditTarget(null);
     showToast("Service type updated successfully!");
   };
 
   const handleAdd = () => {
     if (!newName.trim() || !newPrice.trim()) return;
-    setServices((prev) => [
-      ...prev,
+    const next = [
+      ...services,
       { id: Date.now().toString(), name: newName.trim(), description: newDesc.trim(), price: newPrice.trim(), pricingType: newPricingType, active: true },
-    ]);
+    ];
+    updateServices(next);
     setNewName(""); setNewDesc(""); setNewPrice(""); setNewPricingType("per-kg");
     showToast("Service type added successfully!");
   };
 
-  const handleSaveAll = () => showToast("All service types saved successfully!");
+  const handleSaveAll = () => {
+    persistServices(services);
+    showToast("All service types saved successfully!");
+  };
 
   const canAdd = newName.trim().length > 0 && newPrice.trim().length > 0;
 
@@ -462,7 +488,7 @@ function ServiceTypesSettings() {
               </div>
               <Switch
                 checked={s.active}
-                onCheckedChange={(v) => setServices((prev) => prev.map((x) => x.id === s.id ? { ...x, active: v } : x))}
+                onCheckedChange={(v) => updateServices(services.map((x) => x.id === s.id ? { ...x, active: v } : x))}
               />
               <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(s)}>
                 <Edit className="w-3.5 h-3.5" />
@@ -470,7 +496,7 @@ function ServiceTypesSettings() {
               <Button
                 variant="ghost" size="icon"
                 className="h-7 w-7 text-destructive hover:text-destructive"
-                onClick={() => setServices((p) => p.filter((x) => x.id !== s.id))}
+                onClick={() => updateServices(services.filter((x) => x.id !== s.id))}
               >
                 <Trash2 className="w-3.5 h-3.5" />
               </Button>
