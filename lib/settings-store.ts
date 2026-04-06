@@ -19,9 +19,20 @@ export interface AddOn {
   rate: string;         // flat ₱ added per transaction
 }
 
+export type PricingMode = "per-kg" | "per-load" | "both";
+
+export interface LoadTier {
+  id: string;
+  name: string;
+  range: string;
+  price: string;
+}
+
 export interface PricingConfig {
   pricePerKg: string;
   minWeight: string;
+  pricingMode: PricingMode;
+  loadTiers: LoadTier[];
 }
 
 // ─── localStorage keys ───────────────────────────────────────────────────────
@@ -46,9 +57,18 @@ export const DEFAULT_ADDONS: AddOn[] = [
   { id: "4", name: "Starch",         rate: "20" },
 ];
 
+export const DEFAULT_LOAD_TIERS: LoadTier[] = [
+  { id: "1", name: "Small Load",        range: "below 4 kg",   price: "80"  },
+  { id: "2", name: "Medium Load",       range: "4 kg – 7 kg",  price: "120" },
+  { id: "3", name: "Large Load",        range: "7 kg – 10 kg", price: "180" },
+  { id: "4", name: "Bulk / Commercial", range: "10 kg+",       price: "250" },
+];
+
 export const DEFAULT_PRICING_CONFIG: PricingConfig = {
-  pricePerKg: "30",
-  minWeight:  "",
+  pricePerKg:  "30",
+  minWeight:   "",
+  pricingMode: "per-kg",
+  loadTiers:   DEFAULT_LOAD_TIERS,
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────

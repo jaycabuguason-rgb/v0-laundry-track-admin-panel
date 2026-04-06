@@ -22,8 +22,11 @@ import {
   type ServiceType,
   type AddOn,
   type PricingType,
+  type PricingMode,
+  type LoadTier,
   DEFAULT_SERVICE_TYPES,
   DEFAULT_ADDONS,
+  DEFAULT_LOAD_TIERS,
   loadServiceTypes,
   persistServiceTypes,
   loadAddOns,
@@ -33,23 +36,15 @@ import {
 } from "@/lib/settings-store";
 
 // ─── Pricing ────────────────────────────────────────────────────────────────
-type PricingMode = "per-kg" | "per-load" | "both";
-
-const DEFAULT_LOAD_TIERS = [
-  { id: "1", name: "Small Load",          range: "below 4 kg",    price: "80"  },
-  { id: "2", name: "Medium Load",         range: "4 kg – 7 kg",   price: "120" },
-  { id: "3", name: "Large Load",          range: "7 kg – 10 kg",  price: "180" },
-  { id: "4", name: "Bulk / Commercial",   range: "10 kg+",        price: "250" },
-];
 
 function PricingSettings() {
   // Base pricing — initialised from shared store
-  const [pricingMode, setPricingMode]   = useState<PricingMode>("per-kg");
+  const [pricingMode, setPricingMode]   = useState<PricingMode>(() => loadPricingConfig().pricingMode);
   const [pricePerKg, setPricePerKg]     = useState(() => loadPricingConfig().pricePerKg);
   const [minWeight, setMinWeight]       = useState(() => loadPricingConfig().minWeight);
 
-  // Load tiers
-  const [loadTiers, setLoadTiers] = useState(DEFAULT_LOAD_TIERS);
+  // Load tiers — initialised from shared store
+  const [loadTiers, setLoadTiers] = useState<LoadTier[]>(() => loadPricingConfig().loadTiers);
   const [showAddTier, setShowAddTier]   = useState(false);
   const [newTierName, setNewTierName]   = useState("");
   const [newTierRange, setNewTierRange] = useState("");
@@ -93,6 +88,7 @@ function PricingSettings() {
   ];
 
   return (
+    <>
     <div className="space-y-5 w-full max-w-xl">
 
       {/* ── Base Pricing ─────────────────────────────────────────────────── */}
@@ -342,28 +338,34 @@ function PricingSettings() {
         </CardContent>
       </Card>
 
-      {/* ── Save ─────────────────────────────────────────────────────────── */}
-      <div>
-        {saved && (
-          <div className="flex items-center gap-2 text-green-700 bg-green-50 border border-green-200 rounded-lg px-4 py-2.5 text-sm mb-3 animate-in fade-in slide-in-from-top-1">
-            <CheckCircle2 className="w-4 h-4 shrink-0" />
-            Pricing settings saved!
-          </div>
-        )}
-        <Button
-          size="sm"
-          onClick={() => {
-            persistPricingConfig({ pricePerKg, minWeight });
-            persistAddOns(addOns);
-            setSaved(true);
-            setTimeout(() => setSaved(false), 3000);
-          }}
-          className="flex items-center gap-1.5"
-        >
-          <Save className="w-3.5 h-3.5" /> Save Settings
-        </Button>
-      </div>
+      {/* bottom spacer so content isn't hidden behind sticky bar */}
+      <div className="h-16" />
     </div>
+
+    {/* ── Sticky Save Bar ──────────────────────────────────────────────────── */}
+    <div className="sticky bottom-0 z-10 bg-background border-t border-border px-0 py-3 mt-0 flex items-center justify-between gap-3">
+      {saved ? (
+        <div className="flex items-center gap-2 text-green-700 bg-green-50 border border-green-200 rounded-lg px-4 py-2 text-sm animate-in fade-in slide-in-from-bottom-1">
+          <CheckCircle2 className="w-4 h-4 shrink-0" />
+          Pricing settings saved!
+        </div>
+      ) : (
+        <p className="text-xs text-muted-foreground">Changes are not saved until you click Save.</p>
+      )}
+      <Button
+        size="sm"
+        onClick={() => {
+          persistPricingConfig({ pricePerKg, minWeight, pricingMode, loadTiers });
+          persistAddOns(addOns);
+          setSaved(true);
+          setTimeout(() => setSaved(false), 3000);
+        }}
+        className="flex items-center gap-1.5 shrink-0"
+      >
+        <Save className="w-3.5 h-3.5" /> Save Changes
+      </Button>
+    </div>
+    </>
   );
 }
 

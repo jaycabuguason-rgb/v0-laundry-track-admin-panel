@@ -29,6 +29,8 @@ import { transactions as initialTxns, loyaltyMembers, statusColors, statusOrder,
 import {
   type ServiceType,
   type AddOn,
+  type PricingMode,
+  type LoadTier,
   loadServiceTypes,
   loadAddOns,
   loadPricingConfig,
@@ -229,9 +231,15 @@ function NewTransactionWizard({
   onSubmit: (txn: Omit<Transaction, "id" | "ticketId">) => void;
 }) {
   // Dynamic settings loaded from shared store
-  const [serviceTypes, setServiceTypes] = useState<ServiceType[]>([]);
-  const [addOnOptions, setAddOnOptions] = useState<AddOn[]>([]);
-  const [minWeight, setMinWeightSetting] = useState("0");
+  const [serviceTypes, setServiceTypes]   = useState<ServiceType[]>([]);
+  const [addOnOptions, setAddOnOptions]   = useState<AddOn[]>([]);
+  const [minWeight, setMinWeightSetting]  = useState("0");
+  const [pricingMode, setPricingModeSetting] = useState<PricingMode>("per-kg");
+  const [loadTiers, setLoadTiersSetting]  = useState<LoadTier[]>([]);
+  // For "both" mode — which method staff picks for this transaction
+  const [chargingMode, setChargingMode]   = useState<"per-kg" | "per-load">("per-kg");
+  // For per-load mode — selected tier id
+  const [selectedTierId, setSelectedTierId] = useState<string>("");
 
   const [step, setStep] = useState(1);
   const [form, setForm] = useState<WizardForm>({
@@ -262,6 +270,10 @@ function NewTransactionWizard({
       setServiceTypes(enabledServices);
       setAddOnOptions(addOns);
       setMinWeightSetting(pricingCfg.minWeight || "0");
+      setPricingModeSetting(pricingCfg.pricingMode);
+      setLoadTiersSetting(pricingCfg.loadTiers);
+      setChargingMode("per-kg");
+      setSelectedTierId(pricingCfg.loadTiers[0]?.id ?? "");
 
       setStep(1);
       setForm({
@@ -318,14 +330,24 @@ function NewTransactionWizard({
   const toggleAddOn = (ao: string) =>
     setForm((f) => ({ ...f, addOns: f.addOns.includes(ao) ? f.addOns.filter((x) => x !== ao) : [...f.addOns, ao] }));
 
-  // ── Fee calculation ────────────────────────────────────────────────────────
-  const selectedService = serviceTypes.find((s) => s.name === form.washType);
-  const pricePerUnit    = parseFloat(selectedService?.price ?? "0") || 0;
-  const weight          = parseFloat(form.weight) || 0;
+  // ── Derived pricing context ────────────────────────────────────────────────
+  // Effective mode for this transaction
+  const effectiveMode: "per-kg" | "per-load" =
+    pricingMode === "both" ? chargingMode : (pricingMode === "per-load" ? "per-load" : "per-kg");
 
-  const baseFee = selectedService?.pricingType === "per-load"
-    ? pricePerUnit                           // flat per-load price
-    : Math.round(weight * pricePerUnit);     // per-kg × weight
+  const selectedService = serviceTypes.find((s) => s.name === form.washType);
+  const selectedTier    = loadTiers.find((t) => t.id === selectedTierId);
+  const weight          = parseFloat(form.weight) || 0;
+  const minWeightNum    = parseFloat(minWeight) || 0;
+
+  // ── Fee calculation ────────────────────────────────────────────────────────
+  let baseFee = 0;
+  if (effectiveMode === "per-load" && selectedTier) {
+    baseFee = parseFloat(selectedTier.price) || 0;
+  } else if (effectiveMode === "per-kg" && selectedService) {
+    const pricePerUnit = parseFloat(selectedService.price) || 0;
+    baseFee = Math.round(weight * pricePerUnit);
+  }
 
   const addOnTotal = form.addOns.reduce((sum, name) => {
     const found = addOnOptions.find((a) => a.name === name);
@@ -341,19 +363,25 @@ function NewTransactionWizard({
       ? form.customerName.trim().length > 0
       : form.loyaltyMember !== null;
 
-  const minWeightNum = parseFloat(minWeight) || 0;
-  const isPerLoad = selectedService?.pricingType === "per-load";
-  const step2Valid = form.washType && (isPerLoad || (weight > 0 && weight >= minWeightNum));
+  const step2Valid =
+    effectiveMode === "per-load"
+      ? !!selectedTierId
+      : (!!form.washType && weight > 0 && weight >= minWeightNum);
 
   const handleSubmit = () => {
     const fee = computeFee();
+    // For per-load, the "wash type" shown in the summary is the tier name
+    const displayWashType =
+      effectiveMode === "per-load" && selectedTier
+        ? selectedTier.name
+        : form.washType;
     onSubmit({
       customerName: form.customerName,
       phone: form.phone,
       arrivalDateTime: form.arrivalDateTime,
       dropOffDate: form.arrivalDateTime.split(" ")[0],
-      washType: form.washType,
-      weight: parseFloat(form.weight),
+      washType: displayWashType,
+      weight: effectiveMode === "per-load" ? 0 : parseFloat(form.weight),
       fee,
       status: "Received",
       addOns: form.addOns,
@@ -533,73 +561,13 @@ function NewTransactionWizard({
 
   // ── Step 2: Service Details ───────────────────────────────────────────────
   const renderStep2 = () => {
-    const cols = serviceTypes.length <= 2 ? serviceTypes.length : serviceTypes.length === 4 ? 2 : 3;
-    const isPerkgService = selectedService?.pricingType !== "per-load";
+    const svcCols = serviceTypes.length <= 2 ? serviceTypes.length : serviceTypes.length === 4 ? 2 : 3;
+    const showFee = effectiveMode === "per-load" ? !!selectedTierId : (weight > 0 && !!form.washType);
 
-    return (
-      <div className="space-y-4">
-        {/* Wash Type — dynamic from Settings → Service Types */}
-        <div>
-          <label className="text-xs font-medium text-foreground block mb-1.5">
-            Wash Type <span className="text-destructive">*</span>
-          </label>
-          {serviceTypes.length === 0 ? (
-            <div className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-xs text-muted-foreground">
-              No service types are enabled. Go to Settings → Service Types to enable at least one.
-            </div>
-          ) : (
-            <div className={cn("grid gap-2", cols === 2 ? "grid-cols-2" : "grid-cols-3")}>
-              {serviceTypes.map((svc) => (
-                <button
-                  key={svc.id}
-                  onClick={() => setForm((f) => ({ ...f, washType: svc.name }))}
-                  className={cn(
-                    "rounded-lg border-2 py-2.5 px-3 text-sm font-medium transition-all cursor-pointer flex flex-col items-center gap-0.5",
-                    form.washType === svc.name
-                      ? "border-primary bg-primary/5 text-primary"
-                      : "border-border bg-background hover:border-primary/40 text-foreground"
-                  )}
-                >
-                  <span>{svc.name}</span>
-                  <span className={cn(
-                    "text-[11px] font-normal",
-                    form.washType === svc.name ? "text-primary/70" : "text-muted-foreground"
-                  )}>
-                    ₱{svc.price}/{svc.pricingType === "per-load" ? "load" : "kg"}
-                  </span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Weight — only shown for per-kg services */}
-        {isPerkgService && (
-          <div>
-            <label className="text-xs font-medium text-foreground block mb-1.5">
-              Weight (kg) <span className="text-destructive">*</span>
-              {minWeightNum > 0 && (
-                <span className="ml-1 text-muted-foreground font-normal">(min. {minWeightNum} kg)</span>
-              )}
-            </label>
-            <Input
-              type="number"
-              min={minWeightNum > 0 ? minWeightNum : 0.5}
-              step="0.1"
-              placeholder={minWeightNum > 0 ? `Min. ${minWeightNum} kg` : "e.g. 5.0"}
-              value={form.weight}
-              onChange={(e) => setForm((f) => ({ ...f, weight: e.target.value }))}
-              className="h-9 text-sm"
-            />
-            {minWeightNum > 0 && weight > 0 && weight < minWeightNum && (
-              <p className="text-xs text-destructive mt-1">
-                Weight must be at least {minWeightNum} kg
-              </p>
-            )}
-          </div>
-        )}
-
-        {/* Add-ons — dynamic from Settings → Pricing → Add-on Rates */}
+    // Shared add-ons + wash instructions + fee breakdown block
+    const renderAddOnsAndFee = () => (
+      <>
+        {/* Add-ons */}
         {addOnOptions.length > 0 && (
           <div>
             <label className="text-xs font-medium text-foreground block mb-1.5">Add-ons</label>
@@ -636,17 +604,22 @@ function NewTransactionWizard({
           />
         </div>
 
-        {/* Live fee calculator */}
-        {(weight > 0 || selectedService?.pricingType === "per-load") && form.washType && (
+        {/* Live fee breakdown */}
+        {showFee && (
           <div className="bg-primary/5 border border-primary/20 rounded-lg px-4 py-3 space-y-2">
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Fee Breakdown</p>
             <div className="space-y-1.5">
               <div className="flex items-center justify-between text-sm">
                 <span className="text-muted-foreground">
                   Base fee
-                  {isPerkgService && weight > 0 && (
+                  {effectiveMode === "per-kg" && selectedService && weight > 0 && (
                     <span className="text-xs ml-1 text-muted-foreground/70">
-                      ({weight} kg × ₱{selectedService?.price})
+                      ({weight} kg × ₱{selectedService.price})
+                    </span>
+                  )}
+                  {effectiveMode === "per-load" && selectedTier && (
+                    <span className="text-xs ml-1 text-muted-foreground/70">
+                      ({selectedTier.name})
                     </span>
                   )}
                 </span>
@@ -674,6 +647,139 @@ function NewTransactionWizard({
             </div>
           </div>
         )}
+      </>
+    );
+
+    return (
+      <div className="space-y-4">
+
+        {/* ── "Both" mode — staff picks charging method ─────────────────── */}
+        {pricingMode === "both" && (
+          <div>
+            <label className="text-xs font-medium text-foreground block mb-1.5">Charge by</label>
+            <div className="grid grid-cols-2 gap-2">
+              {(["per-kg", "per-load"] as const).map((mode) => (
+                <button
+                  key={mode}
+                  onClick={() => {
+                    setChargingMode(mode);
+                    // reset mode-specific selections
+                    if (mode === "per-kg") setSelectedTierId(loadTiers[0]?.id ?? "");
+                    else setForm((f) => ({ ...f, weight: "" }));
+                  }}
+                  className={cn(
+                    "rounded-lg border-2 py-2.5 text-sm font-medium transition-all cursor-pointer",
+                    chargingMode === mode
+                      ? "border-primary bg-primary/5 text-primary"
+                      : "border-border bg-background hover:border-primary/40 text-foreground"
+                  )}
+                >
+                  {mode === "per-kg" ? "Per Kilogram" : "Per Load"}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── Per Kg mode ───────────────────────────────────────────────── */}
+        {effectiveMode === "per-kg" && (
+          <>
+            {/* Wash Type */}
+            <div>
+              <label className="text-xs font-medium text-foreground block mb-1.5">
+                Wash Type <span className="text-destructive">*</span>
+              </label>
+              {serviceTypes.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-xs text-muted-foreground">
+                  No service types enabled. Go to Settings → Service Types to enable at least one.
+                </div>
+              ) : (
+                <div className={cn("grid gap-2", svcCols === 2 ? "grid-cols-2" : "grid-cols-3")}>
+                  {serviceTypes.map((svc) => (
+                    <button
+                      key={svc.id}
+                      onClick={() => setForm((f) => ({ ...f, washType: svc.name }))}
+                      className={cn(
+                        "rounded-lg border-2 py-2.5 px-3 text-sm font-medium transition-all cursor-pointer flex flex-col items-center gap-0.5",
+                        form.washType === svc.name
+                          ? "border-primary bg-primary/5 text-primary"
+                          : "border-border bg-background hover:border-primary/40 text-foreground"
+                      )}
+                    >
+                      <span>{svc.name}</span>
+                      <span className={cn("text-[11px] font-normal", form.washType === svc.name ? "text-primary/70" : "text-muted-foreground")}>
+                        ₱{svc.price}/kg
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Weight */}
+            <div>
+              <label className="text-xs font-medium text-foreground block mb-1.5">
+                Weight (kg) <span className="text-destructive">*</span>
+                {minWeightNum > 0 && (
+                  <span className="ml-1 text-muted-foreground font-normal">(min. {minWeightNum} kg)</span>
+                )}
+              </label>
+              <Input
+                type="number"
+                min={minWeightNum > 0 ? minWeightNum : 0.5}
+                step="0.1"
+                placeholder={minWeightNum > 0 ? `Min. ${minWeightNum} kg` : "e.g. 5.0"}
+                value={form.weight}
+                onChange={(e) => setForm((f) => ({ ...f, weight: e.target.value }))}
+                className="h-9 text-sm"
+              />
+              {minWeightNum > 0 && weight > 0 && weight < minWeightNum && (
+                <p className="text-xs text-destructive mt-1">Weight must be at least {minWeightNum} kg</p>
+              )}
+            </div>
+          </>
+        )}
+
+        {/* ── Per Load mode ─────────────────────────────────────────────── */}
+        {effectiveMode === "per-load" && (
+          <div>
+            <label className="text-xs font-medium text-foreground block mb-1.5">
+              Load Size <span className="text-destructive">*</span>
+            </label>
+            {loadTiers.length === 0 ? (
+              <div className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-xs text-muted-foreground">
+                No load tiers configured. Go to Settings → Pricing to add tiers.
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-2">
+                {loadTiers.map((tier) => (
+                  <button
+                    key={tier.id}
+                    onClick={() => setSelectedTierId(tier.id)}
+                    className={cn(
+                      "rounded-lg border-2 py-3 px-3 text-left transition-all cursor-pointer",
+                      selectedTierId === tier.id
+                        ? "border-primary bg-primary/5"
+                        : "border-border bg-background hover:border-primary/40"
+                    )}
+                  >
+                    <p className={cn("text-sm font-semibold leading-tight", selectedTierId === tier.id ? "text-primary" : "text-foreground")}>
+                      {tier.name}
+                    </p>
+                    {tier.range && (
+                      <p className="text-[11px] text-muted-foreground mt-0.5">{tier.range}</p>
+                    )}
+                    <p className={cn("text-base font-bold mt-1", selectedTierId === tier.id ? "text-primary" : "text-foreground")}>
+                      ₱{tier.price}
+                    </p>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {renderAddOnsAndFee()}
       </div>
     );
   };
@@ -695,12 +801,16 @@ function NewTransactionWizard({
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Transaction Summary</p>
           <div className="grid grid-cols-2 gap-2 text-sm">
             {[
-              { label: "Customer",     value: form.customerName },
-              { label: "Phone",        value: form.phone || "—" },
-              { label: "Arrival",      value: form.arrivalDateTime },
-              { label: "Wash Type",    value: form.washType },
-              { label: "Weight",       value: `${form.weight} kg` },
-              { label: "Add-ons",      value: form.addOns.length ? form.addOns.join(", ") : "None" },
+              { label: "Customer",   value: form.customerName },
+              { label: "Phone",      value: form.phone || "—" },
+              { label: "Arrival",    value: form.arrivalDateTime },
+              effectiveMode === "per-load"
+                ? { label: "Load Size",  value: selectedTier ? `${selectedTier.name} (${selectedTier.range})` : "—" }
+                : { label: "Wash Type",  value: form.washType },
+              effectiveMode === "per-load"
+                ? { label: "Pricing",    value: "Per Load" }
+                : { label: "Weight",     value: `${form.weight} kg` },
+              { label: "Add-ons",    value: form.addOns.length ? form.addOns.join(", ") : "None" },
             ].map((row) => (
               <div key={row.label} className="bg-background/60 rounded-md p-2.5">
                 <p className="text-[10px] text-muted-foreground">{row.label}</p>
