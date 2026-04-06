@@ -7,6 +7,9 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { type Page } from "@/components/sidebar";
 import {
   transactions,
@@ -346,17 +349,99 @@ function PricingSettings() {
 }
 
 // ─── Service Types ───────────────────────────────────────────────────────────
+type PricingType = "per-kg" | "per-load" | "flat-rate";
+
+interface ServiceType {
+  id: string;
+  name: string;
+  description: string;
+  price: string;
+  pricingType: PricingType;
+  active: boolean;
+}
+
+const PRICING_TYPE_LABELS: Record<PricingType, string> = {
+  "per-kg":    "Per kg",
+  "per-load":  "Per load",
+  "flat-rate": "Flat rate",
+};
+
 function ServiceTypesSettings() {
-  const [services, setServices] = useState([
-    { id: "1", name: "Regular", description: "Standard wash & dry", active: true },
-    { id: "2", name: "Delicate", description: "Gentle cycle for delicate fabrics", active: true },
-    { id: "3", name: "Express", description: "Same-day turnaround", active: true },
-    { id: "4", name: "Bulk / Commercial", description: "For 10kg and above", active: false },
+  const [services, setServices] = useState<ServiceType[]>([
+    { id: "1", name: "Regular",           description: "Standard wash & dry",              price: "30",  pricingType: "per-kg",    active: true  },
+    { id: "2", name: "Delicate",          description: "Gentle cycle for delicate fabrics", price: "40",  pricingType: "per-kg",    active: true  },
+    { id: "3", name: "Express",           description: "Same-day turnaround",               price: "50",  pricingType: "per-kg",    active: true  },
+    { id: "4", name: "Bulk / Commercial", description: "For 10kg and above",                price: "250", pricingType: "per-load",  active: false },
   ]);
-  const [newService, setNewService] = useState("");
+
+  // Add-new form
+  const [newName, setNewName]               = useState("");
+  const [newDesc, setNewDesc]               = useState("");
+  const [newPrice, setNewPrice]             = useState("");
+  const [newPricingType, setNewPricingType] = useState<PricingType>("per-kg");
+
+  // Edit modal
+  const [editTarget, setEditTarget]         = useState<ServiceType | null>(null);
+  const [editName, setEditName]             = useState("");
+  const [editDesc, setEditDesc]             = useState("");
+  const [editPrice, setEditPrice]           = useState("");
+  const [editPricingType, setEditPricingType] = useState<PricingType>("per-kg");
+  const [editActive, setEditActive]         = useState(true);
+
+  // Toasts
+  const [toast, setToast] = useState<string | null>(null);
+  const showToast = (msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 3000);
+  };
+
+  const openEdit = (s: ServiceType) => {
+    setEditTarget(s);
+    setEditName(s.name);
+    setEditDesc(s.description);
+    setEditPrice(s.price);
+    setEditPricingType(s.pricingType);
+    setEditActive(s.active);
+  };
+
+  const saveEdit = () => {
+    if (!editTarget) return;
+    setServices((prev) =>
+      prev.map((s) =>
+        s.id === editTarget.id
+          ? { ...s, name: editName, description: editDesc, price: editPrice, pricingType: editPricingType, active: editActive }
+          : s
+      )
+    );
+    setEditTarget(null);
+    showToast("Service type updated successfully!");
+  };
+
+  const handleAdd = () => {
+    if (!newName.trim() || !newPrice.trim()) return;
+    setServices((prev) => [
+      ...prev,
+      { id: Date.now().toString(), name: newName.trim(), description: newDesc.trim(), price: newPrice.trim(), pricingType: newPricingType, active: true },
+    ]);
+    setNewName(""); setNewDesc(""); setNewPrice(""); setNewPricingType("per-kg");
+    showToast("Service type added successfully!");
+  };
+
+  const handleSaveAll = () => showToast("All service types saved successfully!");
+
+  const canAdd = newName.trim().length > 0 && newPrice.trim().length > 0;
 
   return (
     <div className="space-y-4 w-full max-w-lg">
+      {/* Toast */}
+      {toast && (
+        <div className="flex items-center gap-2 bg-green-50 border border-green-200 text-green-800 rounded-lg px-4 py-3 text-sm animate-in fade-in slide-in-from-top-2">
+          <CheckCircle2 className="w-4 h-4 shrink-0 text-green-600" />
+          {toast}
+        </div>
+      )}
+
+      {/* Service type list */}
       <Card className="border border-border shadow-none">
         <CardHeader className="pb-3">
           <CardTitle className="text-sm">Service Types</CardTitle>
@@ -365,28 +450,157 @@ function ServiceTypesSettings() {
         <CardContent className="space-y-2">
           {services.map((s) => (
             <div key={s.id} className="flex items-center gap-3 bg-muted/30 rounded-md px-3 py-2.5">
-              <div className="flex-1">
-                <p className="text-sm font-medium text-foreground">{s.name}</p>
-                <p className="text-xs text-muted-foreground">{s.description}</p>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p className="text-sm font-medium text-foreground">{s.name}</p>
+                  <span className="text-xs font-semibold text-primary">₱{s.price}</span>
+                  <span className="text-[10px] text-muted-foreground bg-muted rounded-full px-2 py-0.5">
+                    {PRICING_TYPE_LABELS[s.pricingType]}
+                  </span>
+                </div>
+                {s.description && <p className="text-xs text-muted-foreground truncate">{s.description}</p>}
               </div>
               <Switch
                 checked={s.active}
                 onCheckedChange={(v) => setServices((prev) => prev.map((x) => x.id === s.id ? { ...x, active: v } : x))}
               />
-              <Button variant="ghost" size="icon" className="h-7 w-7"><Edit className="w-3.5 h-3.5" /></Button>
-              <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => setServices((p) => p.filter((x) => x.id !== s.id))}>
+              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(s)}>
+                <Edit className="w-3.5 h-3.5" />
+              </Button>
+              <Button
+                variant="ghost" size="icon"
+                className="h-7 w-7 text-destructive hover:text-destructive"
+                onClick={() => setServices((p) => p.filter((x) => x.id !== s.id))}
+              >
                 <Trash2 className="w-3.5 h-3.5" />
               </Button>
             </div>
           ))}
-          <div className="flex gap-2 mt-3 pt-1 border-t border-border">
-            <Input placeholder="New service type..." value={newService} onChange={(e) => setNewService(e.target.value)} className="flex-1 h-9 text-sm" />
-            <Button size="sm" onClick={() => { if (newService) { setServices((p) => [...p, { id: Date.now().toString(), name: newService, description: "", active: true }]); setNewService(""); } }}>
-              <Plus className="w-3.5 h-3.5 mr-1" /> Add
+
+          {/* Add new form */}
+          <div className="mt-3 pt-3 border-t border-border space-y-2">
+            <p className="text-xs font-semibold text-muted-foreground">Add New Service Type</p>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="col-span-2">
+                <Label className="text-[10px] text-muted-foreground mb-1 block">Service Name <span className="text-destructive">*</span></Label>
+                <Input
+                  placeholder="e.g. Heavy Duty Wash"
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  className="h-8 text-sm"
+                />
+              </div>
+              <div className="col-span-2">
+                <Label className="text-[10px] text-muted-foreground mb-1 block">Description</Label>
+                <Input
+                  placeholder="e.g. For heavily soiled items"
+                  value={newDesc}
+                  onChange={(e) => setNewDesc(e.target.value)}
+                  className="h-8 text-sm"
+                />
+              </div>
+              <div>
+                <Label className="text-[10px] text-muted-foreground mb-1 block">Price (₱) <span className="text-destructive">*</span></Label>
+                <Input
+                  type="number"
+                  min="0"
+                  placeholder="e.g. 60"
+                  value={newPrice}
+                  onChange={(e) => setNewPrice(e.target.value)}
+                  className="h-8 text-sm"
+                />
+              </div>
+              <div>
+                <Label className="text-[10px] text-muted-foreground mb-1 block">Pricing Type</Label>
+                <Select value={newPricingType} onValueChange={(v) => setNewPricingType(v as PricingType)}>
+                  <SelectTrigger className="h-8 text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="per-kg">Per kg</SelectItem>
+                    <SelectItem value="per-load">Per load</SelectItem>
+                    <SelectItem value="flat-rate">Flat rate</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <Button size="sm" className="h-8 gap-1.5 mt-1" onClick={handleAdd} disabled={!canAdd}>
+              <Plus className="w-3.5 h-3.5" /> Add Service Type
             </Button>
           </div>
         </CardContent>
       </Card>
+
+      {/* Save all */}
+      <Button className="w-full gap-1.5" onClick={handleSaveAll}>
+        <Save className="w-4 h-4" /> Save All Changes
+      </Button>
+
+      {/* Edit modal */}
+      <Dialog open={!!editTarget} onOpenChange={(o) => { if (!o) setEditTarget(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-base">Edit Service Type</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 pt-1">
+            <div>
+              <Label className="text-xs font-medium mb-1.5 block">Service Name <span className="text-destructive">*</span></Label>
+              <Input value={editName} onChange={(e) => setEditName(e.target.value)} className="h-9 text-sm" />
+            </div>
+            <div>
+              <Label className="text-xs font-medium mb-1.5 block">Description</Label>
+              <Textarea
+                value={editDesc}
+                onChange={(e) => setEditDesc(e.target.value)}
+                className="text-sm resize-none"
+                rows={2}
+                placeholder="Optional description"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs font-medium mb-1.5 block">Price (₱) <span className="text-destructive">*</span></Label>
+                <Input
+                  type="number"
+                  min="0"
+                  value={editPrice}
+                  onChange={(e) => setEditPrice(e.target.value)}
+                  className="h-9 text-sm"
+                />
+              </div>
+              <div>
+                <Label className="text-xs font-medium mb-1.5 block">Pricing Type</Label>
+                <Select value={editPricingType} onValueChange={(v) => setEditPricingType(v as PricingType)}>
+                  <SelectTrigger className="h-9 text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="per-kg">Per kg</SelectItem>
+                    <SelectItem value="per-load">Per load</SelectItem>
+                    <SelectItem value="flat-rate">Flat rate</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="flex items-center justify-between bg-muted/30 rounded-md px-3 py-2.5">
+              <Label className="text-sm">Active</Label>
+              <Switch checked={editActive} onCheckedChange={setEditActive} />
+            </div>
+            <div className="flex gap-2 pt-1">
+              <Button
+                className="flex-1 gap-1.5"
+                onClick={saveEdit}
+                disabled={!editName.trim() || !editPrice.trim()}
+              >
+                <Save className="w-3.5 h-3.5" /> Save Changes
+              </Button>
+              <Button variant="outline" className="flex-1" onClick={() => setEditTarget(null)}>
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
