@@ -1,10 +1,11 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import {
   ShoppingBag,
   DollarSign,
   AlertCircle,
-  Loader2,
+  RefreshCw,
   Users,
   Eye,
   Edit,
@@ -12,8 +13,9 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { peakHoursData, statusColors, loyaltyMembers } from "@/lib/data";
-import { useAppContext } from "@/lib/app-context";
+import { transactions as seedTxns, peakHoursData, statusColors, loyaltyMembers as seedMembers } from "@/lib/data";
+import type { Transaction } from "@/lib/data";
+import { fetchTransactions } from "@/lib/supabase/db";
 import {
   BarChart,
   Bar,
@@ -25,12 +27,18 @@ import {
 } from "recharts";
 
 export default function DashboardPage() {
-  const { transactions, members } = useAppContext();
+  const [transactions, setTransactions] = useState<Transaction[]>(seedTxns);
 
-  const todayStr    = new Date().toISOString().split("T")[0];
-  const todayTxns   = transactions.filter((t) => t.dropOffDate === todayStr);
+  useEffect(() => {
+    fetchTransactions().then((rows) => {
+      if (rows.length > 0) setTransactions(rows);
+    });
+  }, []);
+
+  const todayStr = new Date().toISOString().split("T")[0];
+  const todayTxns = transactions.filter((t) => t.dropOffDate === todayStr || t.arrivalDateTime?.startsWith(todayStr));
   const totalRevenue = todayTxns.reduce((s, t) => s + t.fee, 0);
-  const unclaimed   = transactions.filter((t) => t.status === "Ready").length;
+  const unclaimed = transactions.filter((t) => t.status === "Ready").length;
   const activeOrders = transactions.filter(
     (t) => t.status === "Received" || t.status === "Washing" || t.status === "Drying"
   ).length;
@@ -63,7 +71,7 @@ export default function DashboardPage() {
     {
       label: "Active Orders",
       value: activeOrders,
-      icon: Loader2,
+      icon: RefreshCw,
       color: "text-purple-600",
       bg: "bg-purple-50",
       change: "In progress",
@@ -178,7 +186,7 @@ export default function DashboardPage() {
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground font-medium">Loyalty Members</p>
-                  <p className="text-2xl font-bold text-foreground">{members.length}</p>
+                  <p className="text-2xl font-bold text-foreground">{seedMembers.length}</p>
                   <p className="text-xs text-muted-foreground">Active enrolled members</p>
                 </div>
               </div>

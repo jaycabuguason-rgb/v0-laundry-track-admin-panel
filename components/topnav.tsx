@@ -11,8 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { type Notification } from "@/lib/data";
-import { useAppContext } from "@/lib/app-context";
+import { initialNotifications, type Notification } from "@/lib/data";
 import {
   Dialog,
   DialogContent,
@@ -54,13 +53,13 @@ interface TopNavProps {
 }
 
 export default function TopNav({ activePage, onNavigate, onSignOut, adminProfile, onMenuToggle }: TopNavProps) {
-  const { notifications, dismissNotification } = useAppContext();
+  const [notifications, setNotifications] = useState<Notification[]>(initialNotifications);
   const [notifOpen, setNotifOpen] = useState(false);
   const [signOutOpen, setSignOutOpen] = useState(false);
 
   const dismiss = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    dismissNotification(id);
+    setNotifications((prev) => prev.filter((n) => n.id !== id));
   };
 
   const viewNotif = (notif: Notification, e: React.MouseEvent) => {

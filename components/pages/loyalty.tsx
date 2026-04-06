@@ -1,12 +1,12 @@
 "use client";
 
-import { useState } from "react";
-import { Search, ChevronLeft, Star } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Search, ChevronLeft, Star, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { type LoyaltyMember } from "@/lib/data";
-import { useAppContext } from "@/lib/app-context";
+import { loyaltyMembers as seedMembers, type LoyaltyMember } from "@/lib/data";
+import { fetchLoyaltyMembers } from "@/lib/supabase/db";
 
 function StampDots({ count, max = 21 }: { count: number; max?: number }) {
   return (
@@ -22,9 +22,17 @@ function StampDots({ count, max = 21 }: { count: number; max?: number }) {
 }
 
 export default function LoyaltyPage() {
-  const { members } = useAppContext();
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<LoyaltyMember | null>(null);
+  const [members, setMembers] = useState<LoyaltyMember[]>(seedMembers);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchLoyaltyMembers().then((rows) => {
+      if (rows.length > 0) setMembers(rows);
+      setLoading(false);
+    });
+  }, []);
 
   const filtered = members.filter(
     (m) =>

@@ -22,11 +22,19 @@ import {
   CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
 import {
-  weeklyRevenueData, serviceRevenueData,
+  weeklyRevenueData, serviceRevenueData, transactions,
   peakByHour, peakByDayOfWeek, peakByWeekOfMonth, peakByMonth, peakBySeason, peakByYear,
 } from "@/lib/data";
-import { useAppContext } from "@/lib/app-context";
 import { cn } from "@/lib/utils";
+
+const unclaimedItems = transactions.filter((t) => t.status === "Ready");
+
+const summaryCards = [
+  { label: "Total Transactions", value: transactions.length,                                                                          sub: "All time" },
+  { label: "Total kg Processed", value: `${transactions.reduce((s, t) => s + t.weight, 0).toFixed(1)} kg`,                           sub: "All time" },
+  { label: "Total Revenue",      value: `₱${transactions.reduce((s, t) => s + t.fee, 0).toLocaleString()}`,                          sub: "All time" },
+  { label: "Unclaimed Count",    value: unclaimedItems.length,                                                                        sub: "Currently waiting" },
+];
 
 // ── Peak period options ──────────────────────────────────────────────────────
 type PeakPeriod = "hour" | "day" | "week" | "month" | "season" | "year";
@@ -66,17 +74,6 @@ const exportOptions = [
 ];
 
 export default function ReportsPage() {
-  const { transactions } = useAppContext();
-
-  const unclaimedItems = transactions.filter((t) => t.status === "Ready");
-
-  const summaryCards = [
-    { label: "Total Transactions", value: transactions.length,                                                                          sub: "All time" },
-    { label: "Total kg Processed", value: `${transactions.reduce((s, t) => s + t.weight, 0).toFixed(1)} kg`,                           sub: "All time" },
-    { label: "Total Revenue",      value: `₱${transactions.reduce((s, t) => s + t.fee, 0).toLocaleString()}`,                          sub: "All time" },
-    { label: "Unclaimed Count",    value: unclaimedItems.length,                                                                        sub: "Currently waiting" },
-  ];
-
   const [revenueRange, setRevenueRange] = useState<"day" | "week" | "month">("week");
 
   // Per-row claim status for the Unclaimed Items tab
@@ -330,7 +327,7 @@ export default function ReportsPage() {
         </Card>
       </TabsContent>
 
-      {/* ── Unclaimed Items ────────────────────────────���────────────────────── */}
+      {/* ── Unclaimed Items ─────────────────────────────────────────────────── */}
       <TabsContent value="unclaimed">
         <Card className="border border-border shadow-none">
           <CardHeader className="pb-3">
