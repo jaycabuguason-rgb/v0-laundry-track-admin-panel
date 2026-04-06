@@ -12,7 +12,8 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { transactions, peakHoursData, statusColors, loyaltyMembers } from "@/lib/data";
+import { peakHoursData, statusColors, loyaltyMembers } from "@/lib/data";
+import { useAppContext } from "@/lib/app-context";
 import {
   BarChart,
   Bar,
@@ -23,49 +24,52 @@ import {
   ResponsiveContainer,
 } from "recharts";
 
-const todayTxns = transactions.filter((t) => t.dropOffDate === "2026-04-05");
-const totalRevenue = todayTxns.reduce((s, t) => s + t.fee, 0);
-const unclaimed = transactions.filter((t) => t.status === "Ready").length;
-const activeOrders = transactions.filter(
-  (t) => t.status === "Received" || t.status === "Washing" || t.status === "Drying"
-).length;
-
-const summaryCards = [
-  {
-    label: "Total Transactions Today",
-    value: todayTxns.length,
-    icon: ShoppingBag,
-    color: "text-blue-600",
-    bg: "bg-blue-50",
-    change: "+3 from yesterday",
-  },
-  {
-    label: "Total Revenue Today",
-    value: `₱${totalRevenue.toLocaleString()}`,
-    icon: DollarSign,
-    color: "text-green-600",
-    bg: "bg-green-50",
-    change: "+12% vs yesterday",
-  },
-  {
-    label: "Unclaimed Items",
-    value: unclaimed,
-    icon: AlertCircle,
-    color: "text-orange-600",
-    bg: "bg-orange-50",
-    change: "Ready for pickup",
-  },
-  {
-    label: "Active Orders",
-    value: activeOrders,
-    icon: Loader2,
-    color: "text-purple-600",
-    bg: "bg-purple-50",
-    change: "In progress",
-  },
-];
-
 export default function DashboardPage() {
+  const { transactions, members } = useAppContext();
+
+  const todayStr    = new Date().toISOString().split("T")[0];
+  const todayTxns   = transactions.filter((t) => t.dropOffDate === todayStr);
+  const totalRevenue = todayTxns.reduce((s, t) => s + t.fee, 0);
+  const unclaimed   = transactions.filter((t) => t.status === "Ready").length;
+  const activeOrders = transactions.filter(
+    (t) => t.status === "Received" || t.status === "Washing" || t.status === "Drying"
+  ).length;
+
+  const summaryCards = [
+    {
+      label: "Total Transactions Today",
+      value: todayTxns.length,
+      icon: ShoppingBag,
+      color: "text-blue-600",
+      bg: "bg-blue-50",
+      change: "Today",
+    },
+    {
+      label: "Total Revenue Today",
+      value: `₱${totalRevenue.toLocaleString()}`,
+      icon: DollarSign,
+      color: "text-green-600",
+      bg: "bg-green-50",
+      change: "Today",
+    },
+    {
+      label: "Unclaimed Items",
+      value: unclaimed,
+      icon: AlertCircle,
+      color: "text-orange-600",
+      bg: "bg-orange-50",
+      change: "Ready for pickup",
+    },
+    {
+      label: "Active Orders",
+      value: activeOrders,
+      icon: Loader2,
+      color: "text-purple-600",
+      bg: "bg-purple-50",
+      change: "In progress",
+    },
+  ];
+
   return (
     <div className="space-y-4 md:space-y-6">
       {/* Summary Cards — 1 col mobile, 2 col sm, 4 col lg */}
@@ -174,7 +178,7 @@ export default function DashboardPage() {
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground font-medium">Loyalty Members</p>
-                  <p className="text-2xl font-bold text-foreground">{loyaltyMembers.length}</p>
+                  <p className="text-2xl font-bold text-foreground">{members.length}</p>
                   <p className="text-xs text-muted-foreground">Active enrolled members</p>
                 </div>
               </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useAppContext } from "@/lib/app-context";
 import { Plus, Trash2, Edit, Save, Upload, Clock, Download, Loader2, CheckCircle2, Scale, ShoppingBasket, Package, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,8 +13,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { type Page } from "@/components/sidebar";
 import {
-  transactions,
-  loyaltyMembers,
   auditLogs,
   serviceRevenueData,
   weeklyRevenueData,
@@ -677,6 +676,7 @@ function BusinessProfileSettings() {
 
 // ─── Backup & Restore ────────────────────────────────────────────────────────
 function BackupSettings() {
+  const { transactions, members: loyaltyMembers } = useAppContext();
   const [autoBackup, setAutoBackup]   = useState(true);
   const [schedule, setSchedule]       = useState<"daily" | "weekly">("daily");
   const [exporting, setExporting]     = useState(false);

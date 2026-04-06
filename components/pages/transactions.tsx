@@ -25,7 +25,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { transactions as initialTxns, loyaltyMembers, statusColors, statusOrder, type Transaction, type LoyaltyMember } from "@/lib/data";
+import { loyaltyMembers, statusColors, statusOrder, type Transaction, type LoyaltyMember } from "@/lib/data";
+import { useAppContext } from "@/lib/app-context";
 import { cn } from "@/lib/utils";
 import { Textarea } from "@/components/ui/textarea";
 
@@ -730,7 +731,7 @@ type HistoryEntry = {
 };
 
 export default function TransactionsPage() {
-  const [txns, setTxns] = useState<Transaction[]>(initialTxns);
+  const { transactions: txns, setTransactions, addTransaction, updateTransaction } = useAppContext();
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [historyIdx, setHistoryIdx] = useState(-1);
 
@@ -764,12 +765,12 @@ export default function TransactionsPage() {
     const newHistory = [...history.slice(0, historyIdx + 1), entry].slice(-10);
     setHistory(newHistory);
     setHistoryIdx(newHistory.length - 1);
-    setTxns(nextTxns);
+    setTransactions(nextTxns);
   };
 
   const undo = () => {
     if (historyIdx < 0) return;
-    setTxns(history[historyIdx].prev);
+    setTransactions(history[historyIdx].prev);
     setHistoryIdx(historyIdx - 1);
     showToast("Last action undone");
   };
@@ -777,7 +778,7 @@ export default function TransactionsPage() {
   const redo = () => {
     if (historyIdx >= history.length - 1) return;
     const next = historyIdx + 1;
-    setTxns(history[next].next);
+    setTransactions(history[next].next);
     setHistoryIdx(next);
     showToast("Action re-applied");
   };
@@ -834,11 +835,13 @@ export default function TransactionsPage() {
   };
 
   const handleNewTransaction = (partial: Omit<Transaction, "id" | "ticketId">) => {
-    const newId     = String(txns.length + 1);
-    const newTicket = `TKT-${String(txns.length + 1).padStart(4, "0")}`;
-    const newTxn: Transaction = { id: newId, ticketId: newTicket, ...partial };
-    commit([newTxn, ...txns], `New transaction ${newTicket}`);
-    showToast(`Ticket #${newTicket} created for ${partial.customerName}`);
+    const newTxn = addTransaction(partial);
+    // Also push into undo history so undo works locally
+    const entry: HistoryEntry = { prev: txns, next: [newTxn, ...txns], description: `New transaction ${newTxn.ticketId}` };
+    const newHistory = [...history.slice(0, historyIdx + 1), entry].slice(-10);
+    setHistory(newHistory);
+    setHistoryIdx(newHistory.length - 1);
+    showToast(`Ticket #${newTxn.ticketId} created for ${partial.customerName}`);
   };
 
   // ── Derived ──────────────────────────────────────────────────────────────

@@ -4,6 +4,7 @@ import { useState } from "react";
 import AppShell from "@/components/app-shell";
 import LoginPage from "@/components/pages/login";
 import ForgotPasswordPage from "@/components/pages/forgot-password";
+import { AppProvider } from "@/lib/app-context";
 
 type AuthView = "login" | "forgot-password" | "app";
 
@@ -39,10 +40,12 @@ export default function Home() {
   }
 
   return (
-    <AppShell
-      onSignOut={() => setView("login")}
-      adminProfile={adminProfile}
-      onProfileUpdate={(updates) => setAdminProfile((prev) => ({ ...prev, ...updates }))}
-    />
+    <AppProvider>
+      <AppShell
+        onSignOut={() => setView("login")}
+        adminProfile={adminProfile}
+        onProfileUpdate={(updates) => setAdminProfile((prev) => ({ ...prev, ...updates }))}
+      />
+    </AppProvider>
   );
 }
