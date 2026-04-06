@@ -71,7 +71,7 @@ export default function ProfilePage({ adminProfile }: ProfilePageProps) {
           <InfoRow label="Full Name"     value={adminProfile.name} />
           <InfoRow label="Username"      value={adminProfile.username || "—"} />
           <InfoRow label="Email Address" value={adminProfile.email} />
-          <InfoRow label="Phone Number"  value={adminProfile.phone} />
+          <InfoRow label="Phone Number"  value={adminProfile.phone || "—"} />
         </CardContent>
       </Card>
 
