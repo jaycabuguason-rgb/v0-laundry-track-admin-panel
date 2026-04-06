@@ -1,27 +1,11 @@
-import { createServerClient } from "@supabase/ssr";
-import { cookies } from "next/headers";
+import { createClient as _createClient } from "@supabase/supabase-js";
 
+// Server-side client — uses the same anon key but is created fresh per call.
+// Cookie-based session persistence is not needed here since auth is managed
+// client-side via createClient() in lib/supabase/client.ts.
 export async function createClient() {
-  const cookieStore = await cookies();
-
-  return createServerClient(
+  return _createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return cookieStore.getAll();
-        },
-        setAll(cookiesToSet) {
-          try {
-            cookiesToSet.forEach(({ name, value, options }) =>
-              cookieStore.set(name, value, options)
-            );
-          } catch {
-            // Called from a Server Component — middleware handles session refresh.
-          }
-        },
-      },
-    }
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   );
 }
