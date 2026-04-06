@@ -1,12 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Search, ChevronLeft, Star, Loader2 } from "lucide-react";
+import { useState } from "react";
+import { Search, ChevronLeft, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { loyaltyMembers as seedMembers, type LoyaltyMember } from "@/lib/data";
-import { fetchLoyaltyMembers } from "@/lib/supabase/db";
+import { loyaltyMembers, type LoyaltyMember } from "@/lib/data";
 
 function StampDots({ count, max = 21 }: { count: number; max?: number }) {
   return (
@@ -24,17 +23,8 @@ function StampDots({ count, max = 21 }: { count: number; max?: number }) {
 export default function LoyaltyPage() {
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<LoyaltyMember | null>(null);
-  const [members, setMembers] = useState<LoyaltyMember[]>(seedMembers);
-  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetchLoyaltyMembers().then((rows) => {
-      if (rows.length > 0) setMembers(rows);
-      setLoading(false);
-    });
-  }, []);
-
-  const filtered = members.filter(
+  const filtered = loyaltyMembers.filter(
     (m) =>
       m.name.toLowerCase().includes(search.toLowerCase()) ||
       m.phone.includes(search)
@@ -168,9 +158,9 @@ export default function LoyaltyPage() {
       {/* Summary */}
       <div className="grid grid-cols-3 gap-4 max-w-lg">
         {[
-          { label: "Total Members", value: members.length },
-          { label: "Avg. Stamps", value: members.length ? Math.round(members.reduce((s, m) => s + m.stampCount, 0) / members.length) : 0 },
-          { label: "Total Rewards", value: members.reduce((s, m) => s + m.rewardsRedeemed, 0) },
+          { label: "Total Members", value: loyaltyMembers.length },
+          { label: "Avg. Stamps", value: Math.round(loyaltyMembers.reduce((s, m) => s + m.stampCount, 0) / loyaltyMembers.length) },
+          { label: "Total Rewards", value: loyaltyMembers.reduce((s, m) => s + m.rewardsRedeemed, 0) },
         ].map((c) => (
           <Card key={c.label} className="border border-border shadow-none">
             <CardContent className="p-4 text-center">
