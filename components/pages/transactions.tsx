@@ -1024,6 +1024,7 @@ export default function TransactionsPage() {
 
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
+  const [filterPayment, setFilterPayment] = useState("all");
   const [filterDate, setFilterDate] = useState<Date | undefined>(undefined);
 
   // New Transaction wizard
@@ -1142,8 +1143,9 @@ export default function TransactionsPage() {
       t.customerName.toLowerCase().includes(search.toLowerCase()) ||
       t.ticketId.toLowerCase().includes(search.toLowerCase());
     const matchStatus = filterStatus === "all" || t.status === filterStatus;
+    const matchPayment = filterPayment === "all" || t.paymentStatus === filterPayment;
     const matchDate = !filterDate || t.dropOffDate === format(filterDate, "yyyy-MM-dd");
-    return matchSearch && matchStatus && matchDate;
+    return matchSearch && matchStatus && matchPayment && matchDate;
   });
 
 
@@ -1181,6 +1183,16 @@ export default function TransactionsPage() {
               <SelectItem key={s} value={s}>{s}</SelectItem>
             ))}
             <SelectItem value="Voided">Voided</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={filterPayment} onValueChange={setFilterPayment}>
+          <SelectTrigger className="w-full sm:w-40 h-10 md:h-9 text-sm">
+            <SelectValue placeholder="All Payments" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Payments</SelectItem>
+            <SelectItem value="paid">Paid</SelectItem>
+            <SelectItem value="unpaid">Unpaid</SelectItem>
           </SelectContent>
         </Select>
         <Popover>

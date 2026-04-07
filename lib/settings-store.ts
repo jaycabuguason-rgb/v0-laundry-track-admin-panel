@@ -39,11 +39,35 @@ export interface PricingConfig {
   priceDisplayMode: PriceDisplayMode;
 }
 
+// ─── Business Profile ────────────────────────────────────────────────────────
+
+export interface BusinessProfile {
+  shopName: string;
+  tagline: string;
+  address: string;
+  contactNumber: string;
+  email: string;
+  /** base64 data-URL of the uploaded logo, or empty string */
+  logoDataUrl: string;
+  receiptFooter: string;
+}
+
+export const DEFAULT_BUSINESS_PROFILE: BusinessProfile = {
+  shopName:      "Sunshine Laundry Shop",
+  tagline:       "Powered by LaundryTrack",
+  address:       "123 Magsaysay Ave, Brgy. Sta. Cruz, Manila",
+  contactNumber: "(02) 8123-4567",
+  email:         "contact@laundrytrack.ph",
+  logoDataUrl:   "",
+  receiptFooter: "Thank you for choosing Sunshine Laundry Shop!",
+};
+
 // ─── localStorage keys ───────────────────────────────────────────────────────
 
-export const LS_SERVICE_TYPES  = "laundrytrack_service_types";
-export const LS_ADDONS         = "laundrytrack_addons";
-export const LS_PRICING_CONFIG = "laundrytrack_pricing_config";
+export const LS_SERVICE_TYPES    = "laundrytrack_service_types";
+export const LS_ADDONS           = "laundrytrack_addons";
+export const LS_PRICING_CONFIG   = "laundrytrack_pricing_config";
+export const LS_BUSINESS_PROFILE = "laundrytrack_business_profile";
 
 // ─── Defaults ────────────────────────────────────────────────────────────────
 
@@ -115,4 +139,12 @@ export function loadPricingConfig(): PricingConfig {
 
 export function persistPricingConfig(cfg: PricingConfig): void {
   persist(LS_PRICING_CONFIG, cfg);
+}
+
+export function loadBusinessProfile(): BusinessProfile {
+  return load(LS_BUSINESS_PROFILE, DEFAULT_BUSINESS_PROFILE);
+}
+
+export function persistBusinessProfile(profile: BusinessProfile): void {
+  persist(LS_BUSINESS_PROFILE, profile);
 }
