@@ -42,6 +42,7 @@ export interface Notification {
   message: string;
   ticketId: string;
   time: string;
+  createdAt: string; // ISO timestamp for programmatic checks (e.g., "2026-04-05T08:14:00")
 }
 
 export const transactions: Transaction[] = [
@@ -74,9 +75,9 @@ export const auditLogs: AuditLog[] = [
 ];
 
 export const initialNotifications: Notification[] = [
-  { id: "n1", type: "ready",     message: "TKT-0001 is ready for pickup",          ticketId: "TKT-0001", time: "2 min ago" },
-  { id: "n2", type: "ready",     message: "TKT-0005 is ready for pickup",          ticketId: "TKT-0005", time: "14 min ago" },
-  { id: "n3", type: "unclaimed", message: "TKT-0008 has been waiting for 2+ days", ticketId: "TKT-0008", time: "1 hr ago" },
+  { id: "n1", type: "ready",     message: "TKT-0001 is ready for pickup",          ticketId: "TKT-0001", time: "2 min ago",   createdAt: "2026-04-05T08:12:00" },
+  { id: "n2", type: "ready",     message: "TKT-0005 is ready for pickup",          ticketId: "TKT-0005", time: "14 min ago",  createdAt: "2026-04-05T08:00:00" },
+  { id: "n3", type: "unclaimed", message: "TKT-0008 has been waiting for 2+ days", ticketId: "TKT-0008", time: "1 hr ago",   createdAt: "2026-04-03T08:35:00" },
 ];
 
 // ── Peak Analysis Data ──────────────────────────────────────────────────────

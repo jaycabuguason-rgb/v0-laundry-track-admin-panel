@@ -49,6 +49,12 @@ export default function AppShell({ onSignOut, adminProfile, onProfileUpdate }: A
     setMobileMenuOpen(false);
   };
 
+  const handleTransactionDetail = (ticketId: string) => {
+    // When a notification is clicked, navigate to transactions page
+    // In a real implementation, you might pass the ticketId and scroll to it or open a detail modal
+    handleNavigate("transactions");
+  };
+
   return (
     <div className="flex h-screen overflow-hidden bg-background">
       {/* Mobile overlay backdrop */}
@@ -77,6 +83,7 @@ export default function AppShell({ onSignOut, adminProfile, onProfileUpdate }: A
           onSignOut={onSignOut}
           adminProfile={adminProfile}
           onMenuToggle={() => setMobileMenuOpen((v) => !v)}
+          onTransactionDetail={handleTransactionDetail}
         />
         <main className="flex-1 overflow-y-auto p-4 md:p-6">
           {renderPage()}
