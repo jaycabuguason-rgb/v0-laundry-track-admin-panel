@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
-import { Download, FileText, CalendarIcon } from "lucide-react";
+import { useState, useMemo, useCallback } from "react";
+import { Download, FileText, CalendarIcon, ChevronLeft, ChevronRight, TrendingUp, TrendingDown } from "lucide-react";
 
-import { format } from "date-fns";
+import { format, startOfWeek, endOfWeek, addWeeks, subWeeks, addMonths, subMonths } from "date-fns";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
@@ -22,8 +22,13 @@ import {
   CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
 import {
-  weeklyRevenueData, serviceRevenueData, transactions,
+  transactions,
   peakByHour, peakByDayOfWeek, peakByWeekOfMonth, peakByMonth, peakBySeason, peakByYear,
+  serviceRevenueData,
+  dayRevenueData, weekRevenueData, monthRevenueData,
+  prevMonthRevenue,
+  serviceRevenueByDay, serviceRevenueByWeek, serviceRevenueByMonth,
+  type RevenuePoint,
 } from "@/lib/data";
 import { cn } from "@/lib/utils";
 
@@ -75,6 +80,66 @@ const exportOptions = [
 
 export default function ReportsPage() {
   const [revenueRange, setRevenueRange] = useState<"day" | "week" | "month">("week");
+
+  // Day view state
+  const [dayDate, setDayDate] = useState<Date>(new Date("2026-04-05"));
+
+  // Week view state — anchor is the Monday of the selected week
+  const [weekAnchor, setWeekAnchor] = useState<Date>(new Date("2026-03-30")); // Mon of Apr 5 week
+  const weekStart = startOfWeek(weekAnchor, { weekStartsOn: 1 });
+  const weekEnd   = endOfWeek(weekAnchor, { weekStartsOn: 1 });
+
+  // Month view state
+  const [monthAnchor, setMonthAnchor] = useState<Date>(new Date("2026-04-01"));
+
+
+  // Derive chart data for the selected range
+  const chartData: RevenuePoint[] = useMemo(() => {
+    if (revenueRange === "day")   return dayRevenueData;
+    if (revenueRange === "week")  return weekRevenueData;
+    return monthRevenueData;
+  }, [revenueRange]);
+
+  const serviceTableData = useMemo(() => {
+    if (revenueRange === "day")   return serviceRevenueByDay;
+    if (revenueRange === "week")  return serviceRevenueByWeek;
+    return serviceRevenueByMonth;
+  }, [revenueRange]);
+
+  // Summary totals
+  const totalPaid   = chartData.reduce((s, d) => s + d.paid,   0);
+  const totalUnpaid = chartData.reduce((s, d) => s + d.unpaid, 0);
+  const totalRev    = totalPaid + totalUnpaid;
+  const totalCount  = chartData.reduce((s, d) => s + d.count,  0);
+  const avgOrder    = totalCount > 0 ? Math.round(totalRev / totalCount) : 0;
+
+  const bestPoint   = chartData.reduce<RevenuePoint | null>((best, d) => {
+    const rev = d.paid + d.unpaid;
+    return best === null || rev > best.paid + best.unpaid ? d : best;
+  }, null);
+
+  const avgDaily    = chartData.length > 0 ? Math.round(totalRev / chartData.filter((d) => d.paid + d.unpaid > 0).length || chartData.length) : 0;
+
+  // Month-over-month
+  const momDiff     = prevMonthRevenue > 0 ? ((totalRev - prevMonthRevenue) / prevMonthRevenue) * 100 : 0;
+  const momPositive = momDiff >= 0;
+
+  // Custom tooltip for revenue chart
+  const RevenueTooltip = useCallback(({ active, payload, label }: { active?: boolean; payload?: { value: number; name: string }[]; label?: string }) => {
+    if (!active || !payload?.length) return null;
+    const paid   = payload.find((p) => p.name === "paid")?.value   ?? 0;
+    const unpaid = payload.find((p) => p.name === "unpaid")?.value ?? 0;
+    const total  = paid + unpaid;
+    const count  = chartData.find((d) => d.label === label)?.count ?? 0;
+    return (
+      <div className="bg-popover border border-border rounded-lg shadow-lg px-3 py-2.5 text-xs space-y-1 min-w-[160px]">
+        <p className="font-semibold text-foreground mb-1">{label}</p>
+        <p className="text-foreground font-bold">₱{total.toLocaleString()} <span className="font-normal text-muted-foreground">({count} txns)</span></p>
+        <p className="text-green-600">Collected: ₱{paid.toLocaleString()}</p>
+        <p className="text-red-500">Pending: ₱{unpaid.toLocaleString()}</p>
+      </div>
+    );
+  }, [chartData]);
 
   // Per-row claim status for the Unclaimed Items tab
   const [claimStatuses, setClaimStatuses] = useState<Record<string, "unclaimed" | "claimed">>(
@@ -268,37 +333,227 @@ export default function ReportsPage() {
 
       {/* ── Revenue Report ─────────────────────────────────────────────────── */}
       <TabsContent value="revenue" className="space-y-4">
+
+        {/* Main chart card */}
         <Card className="border border-border shadow-none">
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between flex-wrap gap-2">
-              <CardTitle className="text-sm font-semibold">Revenue Over Time</CardTitle>
-              <div className="flex gap-1">
-                {(["day", "week", "month"] as const).map((r) => (
-                  <Button
-                    key={r}
-                    size="sm"
-                    variant={revenueRange === r ? "default" : "outline"}
-                    className="h-7 text-xs capitalize"
-                    onClick={() => setRevenueRange(r)}
-                  >
-                    {r}
-                  </Button>
-                ))}
+          <CardHeader className="pb-2">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+
+              {/* Left: title + paid/unpaid legend */}
+              <div className="space-y-1.5">
+                <CardTitle className="text-sm font-semibold">
+                  {revenueRange === "day"
+                    ? `Today's Revenue — ${format(dayDate, "MMMM d, yyyy")}`
+                    : revenueRange === "week"
+                    ? `This Week's Revenue — ${format(weekStart, "MMM d")}–${format(weekEnd, "MMM d, yyyy")}`
+                    : `This Month's Revenue — ${format(monthAnchor, "MMMM yyyy")}`}
+                </CardTitle>
+                <div className="flex flex-wrap items-center gap-3 text-[11px]">
+                  <span className="flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-full bg-green-500 inline-block" />
+                    <span className="text-green-700 font-medium">Collected (Paid): ₱{totalPaid.toLocaleString()}</span>
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-full bg-red-400 inline-block" />
+                    <span className="text-red-600 font-medium">Pending (Unpaid): ₱{totalUnpaid.toLocaleString()}</span>
+                  </span>
+                  <span className="font-bold text-foreground">Total: ₱{totalRev.toLocaleString()}</span>
+                </div>
+              </div>
+
+              {/* Right: toggle + period picker */}
+              <div className="flex flex-wrap items-center gap-2">
+                {/* Day/Week/Month toggle */}
+                <div className="flex gap-1">
+                  {(["day", "week", "month"] as const).map((r) => (
+                    <Button
+                      key={r}
+                      size="sm"
+                      variant={revenueRange === r ? "default" : "outline"}
+                      className="h-7 text-xs capitalize"
+                      onClick={() => setRevenueRange(r)}
+                    >
+                      {r.charAt(0).toUpperCase() + r.slice(1)}
+                    </Button>
+                  ))}
+                </div>
+
+                {/* Day picker */}
+                {revenueRange === "day" && (
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className="h-7 text-xs gap-1.5 px-2.5">
+                        <CalendarIcon className="w-3 h-3 text-muted-foreground" />
+                        {format(dayDate, "MMM d, yyyy")}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="end">
+                      <Calendar mode="single" selected={dayDate} onSelect={(d) => d && setDayDate(d)} initialFocus />
+                    </PopoverContent>
+                  </Popover>
+                )}
+
+                {/* Week picker */}
+                {revenueRange === "week" && (
+                  <div className="flex items-center gap-1">
+                    <Button variant="outline" size="sm" className="h-7 w-7 p-0" onClick={() => setWeekAnchor((w) => subWeeks(w, 1))}>
+                      <ChevronLeft className="w-3.5 h-3.5" />
+                    </Button>
+                    <span className="text-xs text-muted-foreground px-1 whitespace-nowrap">
+                      {format(weekStart, "MMM d")} – {format(weekEnd, "MMM d")}
+                    </span>
+                    <Button variant="outline" size="sm" className="h-7 w-7 p-0" onClick={() => setWeekAnchor((w) => addWeeks(w, 1))}>
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
+                )}
+
+                {/* Month picker */}
+                {revenueRange === "month" && (
+                  <div className="flex items-center gap-1">
+                    <Button variant="outline" size="sm" className="h-7 w-7 p-0" onClick={() => setMonthAnchor((m) => subMonths(m, 1))}>
+                      <ChevronLeft className="w-3.5 h-3.5" />
+                    </Button>
+                    <span className="text-xs text-muted-foreground px-1 whitespace-nowrap">
+                      {format(monthAnchor, "MMMM yyyy")}
+                    </span>
+                    <Button variant="outline" size="sm" className="h-7 w-7 p-0" onClick={() => setMonthAnchor((m) => addMonths(m, 1))}>
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
+                )}
               </div>
             </div>
           </CardHeader>
+
           <CardContent className="pb-4">
-            <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={weeklyRevenueData} barSize={24}>
+            <ResponsiveContainer width="100%" height={240}>
+              <BarChart
+                data={chartData}
+                barSize={revenueRange === "month" ? 14 : revenueRange === "week" ? 28 : 20}
+                barGap={2}
+              >
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
-                <XAxis dataKey="day" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
-                <YAxis tick={{ fontSize: 11 }} tickLine={false} axisLine={false} tickFormatter={(v) => `₱${v}`} />
-                <Tooltip formatter={(v: number) => [`₱${v}`, "Revenue"]} contentStyle={{ fontSize: 12, borderRadius: 6 }} />
-                <Bar dataKey="revenue" fill="var(--primary)" radius={[4, 4, 0, 0]} />
+                <XAxis
+                  dataKey="label"
+                  tick={{ fontSize: 10 }}
+                  tickLine={false}
+                  axisLine={false}
+                  interval={revenueRange === "month" ? 1 : 0}
+                />
+                <YAxis
+                  tick={{ fontSize: 11 }}
+                  tickLine={false}
+                  axisLine={false}
+                  tickFormatter={(v) => `₱${v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v}`}
+                />
+                <Tooltip content={<RevenueTooltip />} />
+                <Bar dataKey="paid"   name="paid"   stackId="a" fill="#16a34a" radius={[0, 0, 0, 0]} />
+                <Bar dataKey="unpaid" name="unpaid" stackId="a" fill="#ef4444" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
         </Card>
+
+        {/* Summary cards */}
+        <div className={cn(
+          "grid gap-3",
+          revenueRange === "day"   && "grid-cols-2 sm:grid-cols-3 lg:grid-cols-5",
+          revenueRange === "week"  && "grid-cols-2 sm:grid-cols-3 lg:grid-cols-6",
+          revenueRange === "month" && "grid-cols-2 sm:grid-cols-3 lg:grid-cols-7",
+        )}>
+          {/* Cards common to all periods */}
+          <Card className="border border-border shadow-none">
+            <CardContent className="p-4">
+              <p className="text-[11px] text-muted-foreground">
+                {revenueRange === "day" ? "Total Revenue Today" : revenueRange === "week" ? "Total Revenue This Week" : "Total Revenue This Month"}
+              </p>
+              <p className="text-lg font-bold text-foreground mt-0.5">₱{totalRev.toLocaleString()}</p>
+            </CardContent>
+          </Card>
+          <Card className="border border-border shadow-none">
+            <CardContent className="p-4">
+              <p className="text-[11px] text-muted-foreground">
+                {revenueRange === "day" ? "Transactions Today" : revenueRange === "week" ? "Transactions This Week" : "Transactions This Month"}
+              </p>
+              <p className="text-lg font-bold text-foreground mt-0.5">{totalCount}</p>
+            </CardContent>
+          </Card>
+          <Card className="border border-border shadow-none">
+            <CardContent className="p-4">
+              <p className="text-[11px] text-muted-foreground">Paid Transactions</p>
+              <p className="text-lg font-bold text-green-600 mt-0.5">₱{totalPaid.toLocaleString()}</p>
+            </CardContent>
+          </Card>
+          <Card className="border border-border shadow-none">
+            <CardContent className="p-4">
+              <p className="text-[11px] text-muted-foreground">Unpaid Transactions</p>
+              <p className="text-lg font-bold text-red-500 mt-0.5">₱{totalUnpaid.toLocaleString()}</p>
+            </CardContent>
+          </Card>
+
+          {/* Day-specific */}
+          {revenueRange === "day" && (
+            <Card className="border border-border shadow-none">
+              <CardContent className="p-4">
+                <p className="text-[11px] text-muted-foreground">Avg. Order Value</p>
+                <p className="text-lg font-bold text-foreground mt-0.5">₱{avgOrder.toLocaleString()}</p>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Week-specific */}
+          {revenueRange === "week" && (
+            <>
+              <Card className="border border-border shadow-none">
+                <CardContent className="p-4">
+                  <p className="text-[11px] text-muted-foreground">Best Day</p>
+                  <p className="text-lg font-bold text-foreground mt-0.5">{bestPoint?.label ?? "—"}</p>
+                  <p className="text-[11px] text-muted-foreground">₱{bestPoint ? (bestPoint.paid + bestPoint.unpaid).toLocaleString() : 0}</p>
+                </CardContent>
+              </Card>
+              <Card className="border border-border shadow-none">
+                <CardContent className="p-4">
+                  <p className="text-[11px] text-muted-foreground">Avg. Daily Revenue</p>
+                  <p className="text-lg font-bold text-foreground mt-0.5">₱{avgDaily.toLocaleString()}</p>
+                </CardContent>
+              </Card>
+            </>
+          )}
+
+          {/* Month-specific */}
+          {revenueRange === "month" && (
+            <>
+              <Card className="border border-border shadow-none">
+                <CardContent className="p-4">
+                  <p className="text-[11px] text-muted-foreground">Best Day</p>
+                  <p className="text-lg font-bold text-foreground mt-0.5">
+                    {format(monthAnchor, "MMM")} {bestPoint?.label ?? "—"}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground">₱{bestPoint ? (bestPoint.paid + bestPoint.unpaid).toLocaleString() : 0}</p>
+                </CardContent>
+              </Card>
+              <Card className="border border-border shadow-none">
+                <CardContent className="p-4">
+                  <p className="text-[11px] text-muted-foreground">Avg. Daily Revenue</p>
+                  <p className="text-lg font-bold text-foreground mt-0.5">₱{avgDaily.toLocaleString()}</p>
+                </CardContent>
+              </Card>
+              <Card className="border border-border shadow-none">
+                <CardContent className="p-4">
+                  <p className="text-[11px] text-muted-foreground">vs. Last Month</p>
+                  <p className={cn("text-lg font-bold mt-0.5 flex items-center gap-1", momPositive ? "text-green-600" : "text-red-500")}>
+                    {momPositive ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
+                    {momPositive ? "+" : ""}{momDiff.toFixed(1)}%
+                  </p>
+                  <p className="text-[11px] text-muted-foreground">vs ₱{prevMonthRevenue.toLocaleString()}</p>
+                </CardContent>
+              </Card>
+            </>
+          )}
+        </div>
+
+        {/* Breakdown by Service Type */}
         <Card className="border border-border shadow-none">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-semibold">Breakdown by Service Type</CardTitle>
@@ -313,7 +568,7 @@ export default function ReportsPage() {
                 </tr>
               </thead>
               <tbody>
-                {serviceRevenueData.map((r) => (
+                {serviceTableData.map((r) => (
                   <tr key={r.service} className="border-b border-border last:border-0 hover:bg-muted/20">
                     <td className="px-4 py-3 text-xs font-medium text-foreground">{r.service}</td>
                     <td className="px-4 py-3 text-xs text-muted-foreground">{r.count}</td>
@@ -327,7 +582,7 @@ export default function ReportsPage() {
         </Card>
       </TabsContent>
 
-      {/* ── Unclaimed Items ─────────────────────────────────────────────────── */}
+      {/* ── Unclaimed Items ────────────────────────────���────────────────────── */}
       <TabsContent value="unclaimed">
         <Card className="border border-border shadow-none">
           <CardHeader className="pb-3">
