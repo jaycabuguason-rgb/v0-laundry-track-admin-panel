@@ -1,6 +1,6 @@
 "use client";
 
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { type Transaction, type TransactionStatus, statusColors } from "@/lib/data";
@@ -35,6 +35,9 @@ export function TransactionDetailModal({ open, onOpenChange, transaction }: Tran
               {transaction.status}
             </span>
           </DialogTitle>
+          <DialogDescription className="sr-only">
+            Transaction details for {transaction.ticketId} — {transaction.customerName}
+          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-5 mt-1">

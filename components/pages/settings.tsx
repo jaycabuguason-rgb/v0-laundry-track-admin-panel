@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { type Page } from "@/components/sidebar";
@@ -699,6 +699,9 @@ function ServiceTypesSettings() {
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle className="text-base">Edit Service Type</DialogTitle>
+            <DialogDescription className="sr-only">
+              Edit the name, description, price, and settings for this service type.
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-3 pt-1">
             <div>
