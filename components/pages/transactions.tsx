@@ -237,16 +237,8 @@ function NewTransactionWizard({
   const [minWeight, setMinWeightSetting]  = useState("0");
   const [pricingMode, setPricingModeSetting] = useState<PricingMode>("per-kg");
   const [loadTiers, setLoadTiersSetting]  = useState<LoadTier[]>([]);
-  // For "both" mode — which method staff picks for this transaction (persisted in sessionStorage)
-  const [chargingMode, setChargingMode]   = useState<"per-kg" | "per-load">(() => {
-    if (typeof window === "undefined") return "per-kg";
-    const saved = sessionStorage.getItem("laundrytrack_charging_mode");
-    return (saved as "per-kg" | "per-load") || "per-kg";
-  });
-  const updateChargingMode = (mode: "per-kg" | "per-load") => {
-    setChargingMode(mode);
-    if (typeof window !== "undefined") sessionStorage.setItem("laundrytrack_charging_mode", mode);
-  };
+  // For "both" mode — which method staff picks for this transaction
+  const [chargingMode, setChargingMode]   = useState<"per-kg" | "per-load">("per-kg");
   // For per-load mode — selected tier id
   const [selectedTierId, setSelectedTierId] = useState<string>("");
   // Price display mode from settings
@@ -283,7 +275,7 @@ function NewTransactionWizard({
       setMinWeightSetting(pricingCfg.minWeight || "0");
       setPricingModeSetting(pricingCfg.pricingMode);
       setLoadTiersSetting(pricingCfg.loadTiers);
-      // chargingMode persists from sessionStorage, don't reset it
+      setChargingMode("per-kg");
       setSelectedTierId(pricingCfg.loadTiers[0]?.id ?? "");
       setPriceDisplayMode(pricingCfg.priceDisplayMode ?? "show");
 
@@ -695,8 +687,8 @@ function NewTransactionWizard({
                 <button
                   key={mode}
                   onClick={() => {
-                    updateChargingMode(mode);
-                    // Reset mode-specific selections when switching
+                    setChargingMode(mode);
+                    // reset mode-specific selections
                     if (mode === "per-kg") setSelectedTierId(loadTiers[0]?.id ?? "");
                     else setForm((f) => ({ ...f, weight: "" }));
                   }}

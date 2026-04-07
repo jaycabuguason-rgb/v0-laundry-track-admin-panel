@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import {
   ShoppingBag,
   DollarSign,
@@ -8,12 +7,12 @@ import {
   Loader2,
   Users,
   Eye,
+  Edit,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { transactions, peakHoursData, statusColors, loyaltyMembers, type Transaction } from "@/lib/data";
-import { TransactionDetailModal } from "@/components/transaction-detail-modal";
+import { transactions, peakHoursData, statusColors, loyaltyMembers } from "@/lib/data";
 import {
   BarChart,
   Bar,
@@ -67,16 +66,7 @@ const summaryCards = [
 ];
 
 export default function DashboardPage() {
-  const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
-  const [detailOpen, setDetailOpen] = useState(false);
-
-  const openDetail = (txn: Transaction) => {
-    setSelectedTransaction(txn);
-    setDetailOpen(true);
-  };
-
   return (
-    <>
     <div className="space-y-4 md:space-y-6">
       {/* Summary Cards — 1 col mobile, 2 col sm, 4 col lg */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
@@ -134,14 +124,14 @@ export default function DashboardPage() {
                           </span>
                         </td>
                         <td className="px-3 py-3 pr-4 md:pr-5">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0 md:h-7 md:w-7"
-                            onClick={() => openDetail(txn)}
-                          >
-                            <Eye className="w-3.5 h-3.5" />
-                          </Button>
+                          <div className="flex items-center gap-0.5">
+                            <Button variant="ghost" size="icon" className="h-8 w-8 min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0 md:h-7 md:w-7">
+                              <Eye className="w-3.5 h-3.5" />
+                            </Button>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0 md:h-7 md:w-7">
+                              <Edit className="w-3.5 h-3.5" />
+                            </Button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -193,13 +183,5 @@ export default function DashboardPage() {
         </div>
       </div>
     </div>
-
-    {/* Transaction Detail Modal */}
-    <TransactionDetailModal
-      open={detailOpen}
-      onOpenChange={setDetailOpen}
-      transaction={selectedTransaction}
-    />
-    </>
   );
 }

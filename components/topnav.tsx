@@ -50,16 +50,12 @@ interface TopNavProps {
   onSignOut: () => void;
   adminProfile: AdminProfile;
   onMenuToggle: () => void;
-  onTransactionDetail?: (ticketId: string) => void;
 }
 
-export default function TopNav({ activePage, onNavigate, onSignOut, adminProfile, onMenuToggle, onTransactionDetail }: TopNavProps) {
+export default function TopNav({ activePage, onNavigate, onSignOut, adminProfile, onMenuToggle }: TopNavProps) {
   const [notifications, setNotifications] = useState<Notification[]>(initialNotifications);
   const [notifOpen, setNotifOpen] = useState(false);
   const [signOutOpen, setSignOutOpen] = useState(false);
-
-  // Filter badge: only show READY + UNCLAIMED notifications
-  const badgeCount = notifications.filter((n) => n.type === "ready" || n.type === "unclaimed").length;
 
   const dismiss = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -68,9 +64,7 @@ export default function TopNav({ activePage, onNavigate, onSignOut, adminProfile
 
   const viewNotif = (notif: Notification, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (onTransactionDetail) {
-      onTransactionDetail(notif.ticketId);
-    } else if (notif.type === "ready" || notif.type === "unclaimed") {
+    if (notif.type === "ready" || notif.type === "unclaimed") {
       onNavigate("transactions");
     } else if (notif.type === "claim" || notif.type === "override") {
       onNavigate("claim-verification");
@@ -101,9 +95,9 @@ export default function TopNav({ activePage, onNavigate, onSignOut, adminProfile
           <DropdownMenuTrigger asChild>
             <button className="relative p-2 rounded-md cursor-pointer hover:bg-accent transition-colors active:scale-95 min-h-[44px] min-w-[44px] flex items-center justify-center">
               <Bell className="w-4 h-4 text-muted-foreground" />
-              {badgeCount > 0 && (
+              {notifications.length > 0 && (
                 <Badge className="absolute -top-0.5 -right-0.5 h-4 w-4 p-0 flex items-center justify-center text-[10px] bg-primary text-primary-foreground border-0">
-                  {badgeCount}
+                  {notifications.length}
                 </Badge>
               )}
             </button>
