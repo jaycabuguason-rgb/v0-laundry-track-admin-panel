@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import {
   ShoppingBag,
   DollarSign,
@@ -7,12 +8,11 @@ import {
   Loader2,
   Users,
   Eye,
-  Edit,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { transactions, peakHoursData, statusColors, loyaltyMembers } from "@/lib/data";
+import { transactions, peakHoursData, statusColors, loyaltyMembers, type Transaction } from "@/lib/data";
+import { TransactionDetailModal } from "@/components/transaction-detail-modal";
 import {
   BarChart,
   Bar,
@@ -66,7 +66,16 @@ const summaryCards = [
 ];
 
 export default function DashboardPage() {
+  const [selectedTxn, setSelectedTxn] = useState<Transaction | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
+
+  const openDetail = (txn: Transaction) => {
+    setSelectedTxn(txn);
+    setDetailOpen(true);
+  };
+
   return (
+    <>
     <div className="space-y-4 md:space-y-6">
       {/* Summary Cards — 1 col mobile, 2 col sm, 4 col lg */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
@@ -114,7 +123,14 @@ export default function DashboardPage() {
                   <tbody>
                     {transactions.slice(0, 6).map((txn) => (
                       <tr key={txn.id} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
-                        <td className="px-4 md:px-5 py-3 text-xs font-mono font-medium text-primary">{txn.ticketId}</td>
+                        <td className="px-4 md:px-5 py-3">
+                          <button
+                            onClick={() => openDetail(txn)}
+                            className="text-xs font-mono font-medium text-primary hover:underline cursor-pointer"
+                          >
+                            {txn.ticketId}
+                          </button>
+                        </td>
                         <td className="px-3 py-3 text-xs font-medium text-foreground">{txn.customerName}</td>
                         <td className="px-3 py-3 text-xs text-muted-foreground hidden md:table-cell">{txn.dropOffDate}</td>
                         <td className="px-3 py-3 text-xs text-muted-foreground hidden md:table-cell">{txn.washType}</td>
@@ -124,14 +140,14 @@ export default function DashboardPage() {
                           </span>
                         </td>
                         <td className="px-3 py-3 pr-4 md:pr-5">
-                          <div className="flex items-center gap-0.5">
-                            <Button variant="ghost" size="icon" className="h-8 w-8 min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0 md:h-7 md:w-7">
-                              <Eye className="w-3.5 h-3.5" />
-                            </Button>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0 md:h-7 md:w-7">
-                              <Edit className="w-3.5 h-3.5" />
-                            </Button>
-                          </div>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0 md:h-7 md:w-7"
+                            onClick={() => openDetail(txn)}
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                          </Button>
                         </td>
                       </tr>
                     ))}
@@ -183,5 +199,12 @@ export default function DashboardPage() {
         </div>
       </div>
     </div>
+
+    <TransactionDetailModal
+      open={detailOpen}
+      onOpenChange={setDetailOpen}
+      transaction={selectedTxn}
+    />
+    </>
   );
 }
