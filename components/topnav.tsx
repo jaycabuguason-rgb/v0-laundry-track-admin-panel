@@ -11,7 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { initialNotifications, type Notification } from "@/lib/data";
+import { initialNotifications, transactions, type Notification } from "@/lib/data";
 import {
   Dialog,
   DialogContent,
@@ -136,7 +136,18 @@ export default function TopNav({ activePage, onNavigate, onSignOut, adminProfile
                       </span>
                       <p className="text-xs font-semibold text-foreground leading-tight">{notif.ticketId}</p>
                       <p className="text-[11px] text-muted-foreground leading-snug">{notif.customerName}</p>
-                      <p className="text-[11px] text-muted-foreground mt-0.5">{notif.time}</p>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        {(() => {
+                          const txn = transactions.find((t) => t.ticketId === notif.ticketId);
+                          if (!txn) return null;
+                          return txn.paymentStatus === "paid" ? (
+                            <span className="inline-block px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-green-500 text-white">PAID</span>
+                          ) : (
+                            <span className="inline-block px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-red-500 text-white">UNPAID</span>
+                          );
+                        })()}
+                        <span className="text-[11px] text-muted-foreground">{notif.time}</span>
+                      </div>
                     </div>
                     <div className="flex flex-col gap-1 shrink-0">
                       <Button

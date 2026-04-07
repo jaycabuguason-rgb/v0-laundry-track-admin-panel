@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Plus, Trash2, Edit, Save, Upload, Clock, Download, Loader2, CheckCircle2, Scale, ShoppingBasket, Package, X, Eye, EyeOff, Tag } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,6 +26,7 @@ import {
   type PricingMode,
   type PriceDisplayMode,
   type LoadTier,
+  type BusinessProfile,
   DEFAULT_SERVICE_TYPES,
   DEFAULT_ADDONS,
   DEFAULT_LOAD_TIERS,
@@ -35,6 +36,8 @@ import {
   persistAddOns,
   loadPricingConfig,
   persistPricingConfig,
+  loadBusinessProfile,
+  persistBusinessProfile,
 } from "@/lib/settings-store";
 
 // ─── Pricing ────────────────────────────────────────────────────────────────
@@ -774,43 +777,164 @@ function ServiceTypesSettings() {
 
 // ─── Business Profile ────────────────────────────────────────────────────────
 function BusinessProfileSettings() {
+  const [profile, setProfile] = useState<BusinessProfile>(() => loadBusinessProfile());
   const [saved, setSaved] = useState(false);
+  const logoInputRef = useRef<HTMLInputElement>(null);
+
+  const update = (patch: Partial<BusinessProfile>) => setProfile((p) => ({ ...p, ...patch }));
+
+  const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) { alert("Logo must be under 2MB."); return; }
+    const reader = new FileReader();
+    reader.onload = () => update({ logoDataUrl: reader.result as string });
+    reader.readAsDataURL(file);
+  };
+
+  const handleSave = () => {
+    persistBusinessProfile(profile);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 3000);
+  };
+
   return (
     <div className="space-y-4 w-full max-w-lg">
+      {saved && (
+        <div className="flex items-center gap-2 bg-green-50 border border-green-200 text-green-800 rounded-lg px-4 py-3 text-sm animate-in fade-in slide-in-from-top-2">
+          <CheckCircle2 className="w-4 h-4 shrink-0 text-green-600" />
+          Business profile saved!
+        </div>
+      )}
+
       <Card className="border border-border shadow-none">
         <CardHeader className="pb-3">
           <CardTitle className="text-sm">Business Profile</CardTitle>
           <CardDescription className="text-xs">This information appears on receipts and the customer tracking page.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
+          {/* Shop Name */}
           <div>
             <Label className="text-xs font-medium mb-1.5 block">Shop Name</Label>
-            <Input defaultValue="LaundryTrack" className="h-9 text-sm" />
+            <Input
+              value={profile.shopName}
+              onChange={(e) => update({ shopName: e.target.value })}
+              className="h-9 text-sm"
+              placeholder="e.g. Sunshine Laundry Shop"
+            />
           </div>
+
+          {/* Tagline */}
+          <div>
+            <Label className="text-xs font-medium mb-1.5 block">Tagline / Subtitle</Label>
+            <Input
+              value={profile.tagline}
+              onChange={(e) => update({ tagline: e.target.value })}
+              className="h-9 text-sm"
+              placeholder="e.g. Powered by LaundryTrack"
+            />
+          </div>
+
+          {/* Address */}
           <div>
             <Label className="text-xs font-medium mb-1.5 block">Address</Label>
-            <Input defaultValue="123 Magsaysay Ave, Brgy. Sta. Cruz, Manila" className="h-9 text-sm" />
+            <Input
+              value={profile.address}
+              onChange={(e) => update({ address: e.target.value })}
+              className="h-9 text-sm"
+              placeholder="e.g. 123 Magsaysay Ave, Manila"
+            />
           </div>
+
+          {/* Contact Number */}
           <div>
             <Label className="text-xs font-medium mb-1.5 block">Contact Number</Label>
-            <Input defaultValue="(02) 8123-4567" className="h-9 text-sm" />
+            <Input
+              value={profile.contactNumber}
+              onChange={(e) => update({ contactNumber: e.target.value })}
+              className="h-9 text-sm"
+              placeholder="e.g. (02) 8123-4567"
+            />
           </div>
+
+          {/* Email */}
           <div>
             <Label className="text-xs font-medium mb-1.5 block">Email</Label>
-            <Input defaultValue="contact@laundrytrack.ph" className="h-9 text-sm" type="email" />
+            <Input
+              type="email"
+              value={profile.email}
+              onChange={(e) => update({ email: e.target.value })}
+              className="h-9 text-sm"
+              placeholder="e.g. contact@laundrytrack.ph"
+            />
           </div>
+
+          {/* Shop Logo */}
           <div>
             <Label className="text-xs font-medium mb-1.5 block">Shop Logo</Label>
-            <div className="border-2 border-dashed border-border rounded-lg p-6 flex flex-col items-center gap-2">
-              <Upload className="w-6 h-6 text-muted-foreground" />
-              <p className="text-xs text-muted-foreground">Click to upload or drag & drop</p>
-              <p className="text-[11px] text-muted-foreground/60">PNG, JPG up to 2MB</p>
-            </div>
+            <input
+              ref={logoInputRef}
+              type="file"
+              accept="image/png,image/jpeg"
+              className="hidden"
+              onChange={handleLogoChange}
+            />
+            {profile.logoDataUrl ? (
+              <div className="flex items-center gap-3">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={profile.logoDataUrl}
+                  alt="Shop logo preview"
+                  className="w-16 h-16 rounded-lg object-contain border border-border bg-muted/30"
+                />
+                <div className="flex flex-col gap-1.5">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs gap-1"
+                    onClick={() => logoInputRef.current?.click()}
+                  >
+                    <Upload className="w-3 h-3" /> Change Logo
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 text-xs text-destructive hover:text-destructive"
+                    onClick={() => update({ logoDataUrl: "" })}
+                  >
+                    Remove
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => logoInputRef.current?.click()}
+                className="w-full border-2 border-dashed border-border rounded-lg p-6 flex flex-col items-center gap-2 hover:border-primary/40 hover:bg-muted/20 transition-colors cursor-pointer"
+              >
+                <Upload className="w-6 h-6 text-muted-foreground" />
+                <p className="text-xs text-muted-foreground">Click to upload or drag & drop</p>
+                <p className="text-[11px] text-muted-foreground/60">PNG, JPG up to 2MB</p>
+              </button>
+            )}
+          </div>
+
+          {/* Receipt Footer Message */}
+          <div>
+            <Label className="text-xs font-medium mb-1.5 block">Receipt Footer Message</Label>
+            <Textarea
+              value={profile.receiptFooter}
+              onChange={(e) => update({ receiptFooter: e.target.value })}
+              placeholder="e.g. Thank you for choosing Sunshine Laundry Shop!"
+              className="text-sm resize-none"
+              rows={2}
+            />
           </div>
         </CardContent>
       </Card>
-      <Button size="sm" onClick={() => { setSaved(true); setTimeout(() => setSaved(false), 2000); }} className="flex items-center gap-1.5">
-        <Save className="w-3.5 h-3.5" /> {saved ? "Saved!" : "Save Profile"}
+
+      <Button size="sm" onClick={handleSave} className="flex items-center gap-1.5">
+        <Save className="w-3.5 h-3.5" /> Save Profile
       </Button>
     </div>
   );

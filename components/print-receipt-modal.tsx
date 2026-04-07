@@ -1,10 +1,11 @@
 "use client";
 
-import { useRef } from "react";
+import { useRef, useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Printer, X } from "lucide-react";
 import { type Transaction } from "@/lib/data";
+import { loadBusinessProfile, type BusinessProfile } from "@/lib/settings-store";
 
 interface PrintReceiptModalProps {
   open: boolean;
@@ -16,6 +17,14 @@ interface PrintReceiptModalProps {
 
 export function PrintReceiptModal({ open, onOpenChange, transaction, postCreate }: PrintReceiptModalProps) {
   const receiptRef = useRef<HTMLDivElement>(null);
+  const [profile, setProfile] = useState<BusinessProfile>(() => loadBusinessProfile());
+
+  // Reload business profile every time the modal opens so changes reflect immediately
+  useEffect(() => {
+    if (open) {
+      setProfile(loadBusinessProfile());
+    }
+  }, [open]);
 
   if (!transaction) return null;
 
@@ -79,8 +88,27 @@ export function PrintReceiptModal({ open, onOpenChange, transaction, postCreate 
         <div className="border border-border rounded-lg p-4 bg-white overflow-hidden">
           <div ref={receiptRef} className="receipt font-mono text-xs text-black space-y-0" style={{ fontFamily: "'Courier New', Courier, monospace" }}>
             {/* Header */}
-            <div className="center bold text-sm mb-1">Sunshine Laundry Shop</div>
-            <div className="center text-[10px] text-gray-500 mb-1">Powered by LaundryTrack</div>
+            {profile.logoDataUrl && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <div className="center" style={{ marginBottom: 4 }}>
+                <img src={profile.logoDataUrl} alt="Shop logo" width={56} height={56} style={{ display: "block", margin: "0 auto", objectFit: "contain" }} />
+              </div>
+            )}
+            {profile.shopName && (
+              <div className="center bold text-sm mb-0.5">{profile.shopName}</div>
+            )}
+            {profile.tagline && (
+              <div className="center text-[10px] text-gray-500 mb-0.5">{profile.tagline}</div>
+            )}
+            {profile.address && (
+              <div className="center text-[10px] text-gray-500 mb-0.5">{profile.address}</div>
+            )}
+            {profile.contactNumber && (
+              <div className="center text-[10px] text-gray-500 mb-0.5">{profile.contactNumber}</div>
+            )}
+            {profile.email && (
+              <div className="center text-[10px] text-gray-500 mb-1">{profile.email}</div>
+            )}
             <div className="divider" style={{ borderTop: "1px dashed #000", margin: "6px 0" }} />
 
             {/* Ticket ID */}
@@ -164,8 +192,9 @@ export function PrintReceiptModal({ open, onOpenChange, transaction, postCreate 
             <div className="divider" style={{ borderTop: "1px dashed #000", margin: "6px 0" }} />
 
             {/* Footer */}
-            <div className="center bold" style={{ margin: "4px 0" }}>Thank you for choosing</div>
-            <div className="center bold" style={{ marginBottom: 4 }}>Sunshine Laundry Shop!</div>
+            {profile.receiptFooter && (
+              <div className="center bold" style={{ margin: "4px 0" }}>{profile.receiptFooter}</div>
+            )}
             <div className="center small" style={{ fontSize: 10, color: "#555" }}>Present this receipt or QR code upon claiming.</div>
           </div>
         </div>
