@@ -274,6 +274,7 @@ function NewTransactionWizard({
   // Reset when dialog opens — also re-read settings so changes in Settings tab are reflected
   useEffect(() => {
     if (open) {
+      // Load all active services — filtering by pricingType happens at render time based on effectiveMode
       const enabledServices = loadServiceTypes().filter((s) => s.active);
       const addOns = loadAddOns();
       const pricingCfg = loadPricingConfig();
@@ -377,7 +378,7 @@ function NewTransactionWizard({
   const step2Valid =
     effectiveMode === "per-load"
       ? !!selectedTierId
-      : (!!form.washType && weight > 0 && weight >= minWeightNum);
+      : (!!form.washType && weight > 0 && weight >= minWeightNum && serviceTypes.some((s) => s.active && (s.pricingType === "per-kg" || s.pricingType === "per-piece")));
 
   const handleSubmit = () => {
     const fee = computeFee();
@@ -572,13 +573,18 @@ function NewTransactionWizard({
 
   // ── Step 2: Service Details ───────────────────────────────────────────────
   const renderStep2 = () => {
-    const svcCols = serviceTypes.length <= 2 ? serviceTypes.length : serviceTypes.length === 4 ? 2 : 3;
-    // Fee preview is hidden entirely when mode is "hide"; "free" shows ₱0; "show" is always visible
+    // Filter services by the effective charging mode's pricingType
+    const perKgServices  = serviceTypes.filter((s) => s.pricingType === "per-kg" || s.pricingType === "per-piece");
+    const perLoadServices = serviceTypes.filter((s) => s.pricingType === "per-load");
+    const visibleServices = effectiveMode === "per-load" ? perLoadServices : perKgServices;
+    const svcCols = visibleServices.length <= 2 ? visibleServices.length || 1 : visibleServices.length === 4 ? 2 : 3;
+
+    // Fee preview is hidden entirely when priceDisplayMode is "hide"; "free" shows ₱0
     const showFeePreview =
       priceDisplayMode !== "hide" &&
       (effectiveMode === "per-load" ? !!selectedTierId : (weight > 0 && !!form.washType));
-    // Whether price labels appear on service/tier buttons
-    const showPriceLabels = priceDisplayMode === "show";
+    // Global price label override — per-service showPrice is respected unless global mode forces hide/free
+    const globalHidePrice = priceDisplayMode === "free" || priceDisplayMode === "hide";
 
     // Shared add-ons + wash instructions + fee breakdown block
     const renderAddOnsAndFee = () => (
@@ -601,7 +607,7 @@ function NewTransactionWizard({
                 >
                   {form.addOns.includes(ao.name) && <Check className="w-3 h-3 inline mr-1" />}
                   {ao.name}
-                  {showPriceLabels && <span className="ml-1 opacity-70">+₱{ao.rate}</span>}
+                  {!globalHidePrice && <span className="ml-1 opacity-70">+₱{ao.rate}</span>}
                 </button>
               ))}
             </div>
@@ -715,36 +721,40 @@ function NewTransactionWizard({
         {/* ── Per Kg mode ───────────────────────────────────────────────── */}
         {effectiveMode === "per-kg" && (
           <>
-            {/* Wash Type */}
+            {/* Wash Type — only per-kg and per-piece services */}
             <div>
               <label className="text-xs font-medium text-foreground block mb-1.5">
                 Wash Type <span className="text-destructive">*</span>
               </label>
-              {serviceTypes.length === 0 ? (
+              {visibleServices.length === 0 ? (
                 <div className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-xs text-muted-foreground">
                   No service types enabled. Go to Settings → Service Types to enable at least one.
                 </div>
               ) : (
                 <div className={cn("grid gap-2", svcCols === 2 ? "grid-cols-2" : "grid-cols-3")}>
-                  {serviceTypes.map((svc) => (
-                    <button
-                      key={svc.id}
-                      onClick={() => setForm((f) => ({ ...f, washType: svc.name }))}
-                      className={cn(
-                        "rounded-lg border-2 py-2.5 px-3 text-sm font-medium transition-all cursor-pointer flex flex-col items-center gap-0.5",
-                        form.washType === svc.name
-                          ? "border-primary bg-primary/5 text-primary"
-                          : "border-border bg-background hover:border-primary/40 text-foreground"
-                      )}
-                    >
-                      <span>{svc.name}</span>
-                      {showPriceLabels && (
-                        <span className={cn("text-[11px] font-normal", form.washType === svc.name ? "text-primary/70" : "text-muted-foreground")}>
-                          ₱{svc.price}/kg
-                        </span>
-                      )}
-                    </button>
-                  ))}
+                  {visibleServices.map((svc) => {
+                    const showThisPrice = !globalHidePrice && (svc.showPrice ?? true);
+                    const unitLabel = svc.pricingType === "per-piece" ? "/pc" : "/kg";
+                    return (
+                      <button
+                        key={svc.id}
+                        onClick={() => setForm((f) => ({ ...f, washType: svc.name }))}
+                        className={cn(
+                          "rounded-lg border-2 py-2.5 px-3 text-sm font-medium transition-all cursor-pointer flex flex-col items-center gap-0.5",
+                          form.washType === svc.name
+                            ? "border-primary bg-primary/5 text-primary"
+                            : "border-border bg-background hover:border-primary/40 text-foreground"
+                        )}
+                      >
+                        <span>{svc.name}</span>
+                        {showThisPrice && (
+                          <span className={cn("text-[11px] font-normal", form.washType === svc.name ? "text-primary/70" : "text-muted-foreground")}>
+                            ₱{svc.price}{unitLabel}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -802,7 +812,7 @@ function NewTransactionWizard({
                     {tier.range && (
                       <p className="text-[11px] text-muted-foreground mt-0.5">{tier.range}</p>
                     )}
-                    {showPriceLabels && (
+                    {!globalHidePrice && (
                       <p className={cn("text-base font-bold mt-1", selectedTierId === tier.id ? "text-primary" : "text-foreground")}>
                         ₱{tier.price}
                       </p>

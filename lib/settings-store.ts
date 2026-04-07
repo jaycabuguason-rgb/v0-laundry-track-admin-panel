@@ -2,15 +2,16 @@
 
 // ─── Shared types ────────────────────────────────────────────────────────────
 
-export type PricingType = "per-kg" | "per-load" | "flat-rate";
+export type PricingType = "per-kg" | "per-load" | "per-piece";
 
 export interface ServiceType {
   id: string;
   name: string;
   description: string;
-  price: string;        // price per unit (kg or load)
+  price: string;        // price per unit (kg, load, or piece)
   pricingType: PricingType;
-  active: boolean;
+  active: boolean;      // show in New Transaction modal
+  showPrice: boolean;   // show price label on the Wash Type button
 }
 
 export interface AddOn {
@@ -47,10 +48,10 @@ export const LS_PRICING_CONFIG = "laundrytrack_pricing_config";
 // ─── Defaults ────────────────────────────────────────────────────────────────
 
 export const DEFAULT_SERVICE_TYPES: ServiceType[] = [
-  { id: "1", name: "Regular",           description: "Standard wash & dry",               price: "30",  pricingType: "per-kg",   active: true  },
-  { id: "2", name: "Delicate",          description: "Gentle cycle for delicate fabrics",  price: "40",  pricingType: "per-kg",   active: true  },
-  { id: "3", name: "Express",           description: "Same-day turnaround",                price: "50",  pricingType: "per-kg",   active: true  },
-  { id: "4", name: "Bulk / Commercial", description: "For 10kg and above",                 price: "250", pricingType: "per-load", active: false },
+  { id: "1", name: "Regular",           description: "Standard wash & dry",               price: "30",  pricingType: "per-kg",   active: true,  showPrice: true },
+  { id: "2", name: "Delicate",          description: "Gentle cycle for delicate fabrics",  price: "40",  pricingType: "per-kg",   active: true,  showPrice: true },
+  { id: "3", name: "Express",           description: "Same-day turnaround",                price: "50",  pricingType: "per-kg",   active: true,  showPrice: true },
+  { id: "4", name: "Bulk / Commercial", description: "For 10kg and above",                 price: "250", pricingType: "per-load", active: false, showPrice: true },
 ];
 
 export const DEFAULT_ADDONS: AddOn[] = [

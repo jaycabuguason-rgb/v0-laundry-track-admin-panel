@@ -453,7 +453,7 @@ function PricingSettings() {
 const PRICING_TYPE_LABELS: Record<PricingType, string> = {
   "per-kg":    "Per kg",
   "per-load":  "Per load",
-  "flat-rate": "Flat rate",
+  "per-piece": "Per piece",
 };
 
 function ServiceTypesSettings() {
@@ -470,6 +470,8 @@ function ServiceTypesSettings() {
   const [newDesc, setNewDesc]               = useState("");
   const [newPrice, setNewPrice]             = useState("");
   const [newPricingType, setNewPricingType] = useState<PricingType>("per-kg");
+  const [newShowInTxn, setNewShowInTxn]     = useState(true);
+  const [newShowPrice, setNewShowPrice]     = useState(true);
 
   // Edit modal
   const [editTarget, setEditTarget]         = useState<ServiceType | null>(null);
@@ -478,6 +480,7 @@ function ServiceTypesSettings() {
   const [editPrice, setEditPrice]           = useState("");
   const [editPricingType, setEditPricingType] = useState<PricingType>("per-kg");
   const [editActive, setEditActive]         = useState(true);
+  const [editShowPrice, setEditShowPrice]   = useState(true);
 
   // Toasts
   const [toast, setToast] = useState<string | null>(null);
@@ -493,13 +496,14 @@ function ServiceTypesSettings() {
     setEditPrice(s.price);
     setEditPricingType(s.pricingType);
     setEditActive(s.active);
+    setEditShowPrice(s.showPrice ?? true);
   };
 
   const saveEdit = () => {
     if (!editTarget) return;
     const next = services.map((s) =>
       s.id === editTarget.id
-        ? { ...s, name: editName, description: editDesc, price: editPrice, pricingType: editPricingType, active: editActive }
+        ? { ...s, name: editName, description: editDesc, price: editPrice, pricingType: editPricingType, active: editActive, showPrice: editShowPrice }
         : s
     );
     updateServices(next);
@@ -511,10 +515,19 @@ function ServiceTypesSettings() {
     if (!newName.trim() || !newPrice.trim()) return;
     const next = [
       ...services,
-      { id: Date.now().toString(), name: newName.trim(), description: newDesc.trim(), price: newPrice.trim(), pricingType: newPricingType, active: true },
+      {
+        id: Date.now().toString(),
+        name: newName.trim(),
+        description: newDesc.trim(),
+        price: newPrice.trim(),
+        pricingType: newPricingType,
+        active: newShowInTxn,
+        showPrice: newShowPrice,
+      },
     ];
     updateServices(next);
     setNewName(""); setNewDesc(""); setNewPrice(""); setNewPricingType("per-kg");
+    setNewShowInTxn(true); setNewShowPrice(true);
     showToast("Service type added successfully!");
   };
 
@@ -543,31 +556,52 @@ function ServiceTypesSettings() {
         </CardHeader>
         <CardContent className="space-y-2">
           {services.map((s) => (
-            <div key={s.id} className="flex items-center gap-3 bg-muted/30 rounded-md px-3 py-2.5">
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <p className="text-sm font-medium text-foreground">{s.name}</p>
-                  <span className="text-xs font-semibold text-primary">₱{s.price}</span>
-                  <span className="text-[10px] text-muted-foreground bg-muted rounded-full px-2 py-0.5">
-                    {PRICING_TYPE_LABELS[s.pricingType]}
-                  </span>
-                </div>
-                {s.description && <p className="text-xs text-muted-foreground truncate">{s.description}</p>}
+            <div key={s.id} className="bg-muted/30 rounded-md px-3 py-2.5 space-y-2">
+              {/* Top row: name + badges */}
+              <div className="flex items-start gap-2 flex-wrap">
+                <p className="text-sm font-semibold text-foreground">{s.name}</p>
+                {(s.showPrice ?? true) && (
+                  <span className="text-xs font-semibold text-primary bg-primary/10 rounded-full px-2 py-0.5">₱{s.price}</span>
+                )}
+                <span className="text-[10px] font-medium text-muted-foreground bg-muted rounded-full px-2 py-0.5 border border-border">
+                  {PRICING_TYPE_LABELS[s.pricingType] ?? s.pricingType}
+                </span>
               </div>
-              <Switch
-                checked={s.active}
-                onCheckedChange={(v) => updateServices(services.map((x) => x.id === s.id ? { ...x, active: v } : x))}
-              />
-              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(s)}>
-                <Edit className="w-3.5 h-3.5" />
-              </Button>
-              <Button
-                variant="ghost" size="icon"
-                className="h-7 w-7 text-destructive hover:text-destructive"
-                onClick={() => updateServices(services.filter((x) => x.id !== s.id))}
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-              </Button>
+              {s.description && <p className="text-xs text-muted-foreground">{s.description}</p>}
+
+              {/* Bottom row: toggles + actions */}
+              <div className="flex items-center gap-3 flex-wrap">
+                {/* Toggle 1: Show in Transaction */}
+                <div className="flex items-center gap-1.5">
+                  <Switch
+                    checked={s.active}
+                    onCheckedChange={(v) => updateServices(services.map((x) => x.id === s.id ? { ...x, active: v } : x))}
+                    className="scale-90"
+                  />
+                  <span className="text-[11px] text-muted-foreground font-medium">Show</span>
+                </div>
+                {/* Toggle 2: Show Price */}
+                <div className="flex items-center gap-1.5">
+                  <Switch
+                    checked={s.showPrice ?? true}
+                    onCheckedChange={(v) => updateServices(services.map((x) => x.id === s.id ? { ...x, showPrice: v } : x))}
+                    className="scale-90"
+                  />
+                  <span className="text-[11px] text-muted-foreground font-medium">Price</span>
+                </div>
+                {/* Spacer */}
+                <div className="flex-1" />
+                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(s)}>
+                  <Edit className="w-3.5 h-3.5" />
+                </Button>
+                <Button
+                  variant="ghost" size="icon"
+                  className="h-7 w-7 text-destructive hover:text-destructive"
+                  onClick={() => updateServices(services.filter((x) => x.id !== s.id))}
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </Button>
+              </div>
             </div>
           ))}
 
@@ -613,9 +647,19 @@ function ServiceTypesSettings() {
                   <SelectContent>
                     <SelectItem value="per-kg">Per kg</SelectItem>
                     <SelectItem value="per-load">Per load</SelectItem>
-                    <SelectItem value="flat-rate">Flat rate</SelectItem>
+                    <SelectItem value="per-piece">Per piece</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+            </div>
+            <div className="flex items-center gap-4 pt-1">
+              <div className="flex items-center gap-2">
+                <Switch checked={newShowInTxn} onCheckedChange={setNewShowInTxn} />
+                <Label className="text-xs text-muted-foreground">Show in Transaction</Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <Switch checked={newShowPrice} onCheckedChange={setNewShowPrice} />
+                <Label className="text-xs text-muted-foreground">Show Price</Label>
               </div>
             </div>
             <Button size="sm" className="h-8 gap-1.5 mt-1" onClick={handleAdd} disabled={!canAdd}>
@@ -671,14 +715,20 @@ function ServiceTypesSettings() {
                   <SelectContent>
                     <SelectItem value="per-kg">Per kg</SelectItem>
                     <SelectItem value="per-load">Per load</SelectItem>
-                    <SelectItem value="flat-rate">Flat rate</SelectItem>
+                    <SelectItem value="per-piece">Per piece</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             </div>
-            <div className="flex items-center justify-between bg-muted/30 rounded-md px-3 py-2.5">
-              <Label className="text-sm">Active</Label>
-              <Switch checked={editActive} onCheckedChange={setEditActive} />
+            <div className="grid grid-cols-2 gap-2">
+              <div className="flex items-center justify-between bg-muted/30 rounded-md px-3 py-2.5">
+                <Label className="text-sm">Show</Label>
+                <Switch checked={editActive} onCheckedChange={setEditActive} />
+              </div>
+              <div className="flex items-center justify-between bg-muted/30 rounded-md px-3 py-2.5">
+                <Label className="text-sm">Price</Label>
+                <Switch checked={editShowPrice} onCheckedChange={setEditShowPrice} />
+              </div>
             </div>
             <div className="flex gap-2 pt-1">
               <Button
