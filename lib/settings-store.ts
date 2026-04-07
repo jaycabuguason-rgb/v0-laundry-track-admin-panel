@@ -28,11 +28,14 @@ export interface LoadTier {
   price: string;
 }
 
+export type PriceDisplayMode = "show" | "free" | "hide";
+
 export interface PricingConfig {
   pricePerKg: string;
   minWeight: string;
   pricingMode: PricingMode;
   loadTiers: LoadTier[];
+  priceDisplayMode: PriceDisplayMode;
 }
 
 // ─── localStorage keys ───────────────────────────────────────────────────────
@@ -65,10 +68,11 @@ export const DEFAULT_LOAD_TIERS: LoadTier[] = [
 ];
 
 export const DEFAULT_PRICING_CONFIG: PricingConfig = {
-  pricePerKg:  "30",
-  minWeight:   "",
-  pricingMode: "per-kg",
-  loadTiers:   DEFAULT_LOAD_TIERS,
+  pricePerKg:       "30",
+  minWeight:        "",
+  pricingMode:      "per-kg",
+  loadTiers:        DEFAULT_LOAD_TIERS,
+  priceDisplayMode: "show",
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────

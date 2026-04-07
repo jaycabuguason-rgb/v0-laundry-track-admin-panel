@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Trash2, Edit, Save, Upload, Clock, Download, Loader2, CheckCircle2, Scale, ShoppingBasket, Package, X } from "lucide-react";
+import { Plus, Trash2, Edit, Save, Upload, Clock, Download, Loader2, CheckCircle2, Scale, ShoppingBasket, Package, X, Eye, EyeOff, Tag } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -23,6 +23,7 @@ import {
   type AddOn,
   type PricingType,
   type PricingMode,
+  type PriceDisplayMode,
   type LoadTier,
   DEFAULT_SERVICE_TYPES,
   DEFAULT_ADDONS,
@@ -59,6 +60,11 @@ function PricingSettings() {
   const [addOns, setAddOns] = useState<AddOn[]>(() => loadAddOns());
   const [newName, setNewName] = useState("");
   const [newRate, setNewRate] = useState("");
+
+  // Price display mode — initialised from shared store
+  const [priceDisplayMode, setPriceDisplayMode] = useState<PriceDisplayMode>(
+    () => loadPricingConfig().priceDisplayMode ?? "show"
+  );
 
   // Save state
   const [saved, setSaved] = useState(false);
@@ -338,6 +344,79 @@ function PricingSettings() {
         </CardContent>
       </Card>
 
+      {/* ── Price Display Settings ───────────────────────────────────────── */}
+      <Card className="border border-border shadow-none">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm">Price Display Settings</CardTitle>
+          <CardDescription className="text-xs">Control how prices appear to staff during transaction entry.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {(() => {
+            const DISPLAY_MODES: {
+              value: PriceDisplayMode;
+              icon: React.ReactNode;
+              label: string;
+              description: string;
+            }[] = [
+              {
+                value: "show",
+                icon: <Eye className="w-5 h-5" />,
+                label: "Show Price",
+                description: "Staff sees the price on each Wash Type and Load Size button, and the fee updates live as they fill out the form.",
+              },
+              {
+                value: "free",
+                icon: <Tag className="w-5 h-5" />,
+                label: "No Price / Free",
+                description: "All fees are set to ₱0. Useful for promo days or owner use. No prices are shown on buttons.",
+              },
+              {
+                value: "hide",
+                icon: <EyeOff className="w-5 h-5" />,
+                label: "Hide Price",
+                description: "Prices are kept but hidden from buttons and the live preview. Staff only sees the total on the final confirmation step.",
+              },
+            ];
+
+            return (
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                {DISPLAY_MODES.map(({ value, icon, label, description }) => {
+                  const active = priceDisplayMode === value;
+                  return (
+                    <button
+                      key={value}
+                      onClick={() => setPriceDisplayMode(value)}
+                      className={[
+                        "flex flex-col items-start gap-2 rounded-xl border-2 p-4 text-left transition-all cursor-pointer",
+                        active
+                          ? "border-primary bg-primary/5 shadow-sm"
+                          : "border-border bg-background hover:border-primary/40 hover:bg-muted/20",
+                      ].join(" ")}
+                    >
+                      <div className={[
+                        "w-9 h-9 rounded-full flex items-center justify-center shrink-0",
+                        active ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground",
+                      ].join(" ")}>
+                        {icon}
+                      </div>
+                      <div className="space-y-0.5">
+                        <p className={["text-sm font-semibold leading-tight", active ? "text-primary" : "text-foreground"].join(" ")}>
+                          {label}
+                        </p>
+                        <p className="text-[11px] text-muted-foreground leading-snug">{description}</p>
+                      </div>
+                      {active && (
+                        <span className="mt-auto text-[10px] font-semibold uppercase tracking-wider text-primary">Active</span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            );
+          })()}
+        </CardContent>
+      </Card>
+
       {/* bottom spacer so content isn't hidden behind sticky bar */}
       <div className="h-16" />
     </div>
@@ -355,7 +434,7 @@ function PricingSettings() {
       <Button
         size="sm"
         onClick={() => {
-          persistPricingConfig({ pricePerKg, minWeight, pricingMode, loadTiers });
+          persistPricingConfig({ pricePerKg, minWeight, pricingMode, loadTiers, priceDisplayMode });
           persistAddOns(addOns);
           setSaved(true);
           setTimeout(() => setSaved(false), 3000);

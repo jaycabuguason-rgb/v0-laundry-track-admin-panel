@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import {
-  Search, Eye, Edit, Ban, Printer, ChevronRight, X, QrCode, CalendarIcon,
+  Search, Eye, EyeOff, Edit, Ban, Printer, ChevronRight, X, QrCode, CalendarIcon,
   Undo2, Redo2, AlertTriangle, Plus, User, Star, Camera, CameraOff,
   ChevronLeft, Check, RefreshCw,
 } from "lucide-react";
@@ -30,6 +30,7 @@ import {
   type ServiceType,
   type AddOn,
   type PricingMode,
+  type PriceDisplayMode,
   type LoadTier,
   loadServiceTypes,
   loadAddOns,
@@ -240,6 +241,8 @@ function NewTransactionWizard({
   const [chargingMode, setChargingMode]   = useState<"per-kg" | "per-load">("per-kg");
   // For per-load mode — selected tier id
   const [selectedTierId, setSelectedTierId] = useState<string>("");
+  // Price display mode from settings
+  const [priceDisplayMode, setPriceDisplayMode] = useState<PriceDisplayMode>("show");
 
   const [step, setStep] = useState(1);
   const [form, setForm] = useState<WizardForm>({
@@ -274,6 +277,7 @@ function NewTransactionWizard({
       setLoadTiersSetting(pricingCfg.loadTiers);
       setChargingMode("per-kg");
       setSelectedTierId(pricingCfg.loadTiers[0]?.id ?? "");
+      setPriceDisplayMode(pricingCfg.priceDisplayMode ?? "show");
 
       setStep(1);
       setForm({
@@ -354,7 +358,7 @@ function NewTransactionWizard({
     return sum + (parseFloat(found?.rate ?? "0") || 0);
   }, 0);
 
-  const totalFee = baseFee + addOnTotal;
+  const totalFee = priceDisplayMode === "free" ? 0 : (baseFee + addOnTotal);
 
   const computeFee = () => totalFee;
 
@@ -562,7 +566,12 @@ function NewTransactionWizard({
   // ── Step 2: Service Details ───────────────────────────────────────────────
   const renderStep2 = () => {
     const svcCols = serviceTypes.length <= 2 ? serviceTypes.length : serviceTypes.length === 4 ? 2 : 3;
-    const showFee = effectiveMode === "per-load" ? !!selectedTierId : (weight > 0 && !!form.washType);
+    // Fee preview is hidden entirely when mode is "hide"; "free" shows ₱0; "show" is always visible
+    const showFeePreview =
+      priceDisplayMode !== "hide" &&
+      (effectiveMode === "per-load" ? !!selectedTierId : (weight > 0 && !!form.washType));
+    // Whether price labels appear on service/tier buttons
+    const showPriceLabels = priceDisplayMode === "show";
 
     // Shared add-ons + wash instructions + fee breakdown block
     const renderAddOnsAndFee = () => (
@@ -585,7 +594,7 @@ function NewTransactionWizard({
                 >
                   {form.addOns.includes(ao.name) && <Check className="w-3 h-3 inline mr-1" />}
                   {ao.name}
-                  <span className="ml-1 opacity-70">+₱{ao.rate}</span>
+                  {showPriceLabels && <span className="ml-1 opacity-70">+₱{ao.rate}</span>}
                 </button>
               ))}
             </div>
@@ -604,47 +613,63 @@ function NewTransactionWizard({
           />
         </div>
 
-        {/* Live fee breakdown */}
-        {showFee && (
+        {/* Live fee breakdown — hidden in "hide" mode, always ₱0 in "free" mode */}
+        {showFeePreview && (
           <div className="bg-primary/5 border border-primary/20 rounded-lg px-4 py-3 space-y-2">
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Fee Breakdown</p>
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">
-                  Base fee
-                  {effectiveMode === "per-kg" && selectedService && weight > 0 && (
-                    <span className="text-xs ml-1 text-muted-foreground/70">
-                      ({weight} kg × ₱{selectedService.price})
-                    </span>
-                  )}
-                  {effectiveMode === "per-load" && selectedTier && (
-                    <span className="text-xs ml-1 text-muted-foreground/70">
-                      ({selectedTier.name})
-                    </span>
-                  )}
-                </span>
-                <span className="font-medium text-foreground">₱{baseFee}</span>
+            {priceDisplayMode === "free" ? (
+              <div className="flex items-center justify-between border-t border-primary/20 pt-2">
+                <span className="text-sm font-semibold">Total</span>
+                <span className="text-lg font-bold text-primary">₱0</span>
               </div>
-              {form.addOns.map((name) => {
-                const ao = addOnOptions.find((a) => a.name === name);
-                return ao ? (
-                  <div key={name} className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">{name}</span>
-                    <span className="font-medium text-foreground">+₱{ao.rate}</span>
+            ) : (
+              <>
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">
+                      Base fee
+                      {effectiveMode === "per-kg" && selectedService && weight > 0 && (
+                        <span className="text-xs ml-1 text-muted-foreground/70">
+                          ({weight} kg × ₱{selectedService.price})
+                        </span>
+                      )}
+                      {effectiveMode === "per-load" && selectedTier && (
+                        <span className="text-xs ml-1 text-muted-foreground/70">
+                          ({selectedTier.name})
+                        </span>
+                      )}
+                    </span>
+                    <span className="font-medium text-foreground">₱{baseFee}</span>
                   </div>
-                ) : null;
-              })}
-              {form.addOns.length > 0 && (
-                <div className="flex items-center justify-between text-xs text-muted-foreground pt-0.5 border-t border-primary/10">
-                  <span>Add-ons total</span>
-                  <span>+₱{addOnTotal}</span>
+                  {form.addOns.map((name) => {
+                    const ao = addOnOptions.find((a) => a.name === name);
+                    return ao ? (
+                      <div key={name} className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">{name}</span>
+                        <span className="font-medium text-foreground">+₱{ao.rate}</span>
+                      </div>
+                    ) : null;
+                  })}
+                  {form.addOns.length > 0 && (
+                    <div className="flex items-center justify-between text-xs text-muted-foreground pt-0.5 border-t border-primary/10">
+                      <span>Add-ons total</span>
+                      <span>+₱{addOnTotal}</span>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-            <div className="flex items-center justify-between border-t border-primary/20 pt-2">
-              <span className="text-sm font-semibold">Total</span>
-              <span className="text-lg font-bold text-primary">₱{totalFee}</span>
-            </div>
+                <div className="flex items-center justify-between border-t border-primary/20 pt-2">
+                  <span className="text-sm font-semibold">Total</span>
+                  <span className="text-lg font-bold text-primary">₱{totalFee}</span>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+        {/* "hide" mode hint — shown when a service/tier is selected but fee is deferred to Step 3 */}
+        {priceDisplayMode === "hide" && (effectiveMode === "per-load" ? !!selectedTierId : (weight > 0 && !!form.washType)) && (
+          <div className="flex items-center gap-2 bg-muted/40 border border-border rounded-lg px-3 py-2.5 text-xs text-muted-foreground">
+            <EyeOff className="w-3.5 h-3.5 shrink-0" />
+            Fee will be shown on the next step before you confirm.
           </div>
         )}
       </>
@@ -707,9 +732,11 @@ function NewTransactionWizard({
                       )}
                     >
                       <span>{svc.name}</span>
-                      <span className={cn("text-[11px] font-normal", form.washType === svc.name ? "text-primary/70" : "text-muted-foreground")}>
-                        ₱{svc.price}/kg
-                      </span>
+                      {showPriceLabels && (
+                        <span className={cn("text-[11px] font-normal", form.washType === svc.name ? "text-primary/70" : "text-muted-foreground")}>
+                          ₱{svc.price}/kg
+                        </span>
+                      )}
                     </button>
                   ))}
                 </div>
@@ -769,9 +796,11 @@ function NewTransactionWizard({
                     {tier.range && (
                       <p className="text-[11px] text-muted-foreground mt-0.5">{tier.range}</p>
                     )}
-                    <p className={cn("text-base font-bold mt-1", selectedTierId === tier.id ? "text-primary" : "text-foreground")}>
-                      ₱{tier.price}
-                    </p>
+                    {showPriceLabels && (
+                      <p className={cn("text-base font-bold mt-1", selectedTierId === tier.id ? "text-primary" : "text-foreground")}>
+                        ₱{tier.price}
+                      </p>
+                    )}
                   </button>
                 ))}
               </div>
