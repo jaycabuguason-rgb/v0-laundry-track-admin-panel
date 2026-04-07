@@ -1,16 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Trash2, Edit, Save, Upload, Clock, Download, Loader2, CheckCircle2, Scale, ShoppingBasket, Package, X } from "lucide-react";
+import { Plus, Trash2, Edit, Save, Upload, Clock, Download, Loader2, CheckCircle2, Scale, ShoppingBasket, Package, X, Eye, EyeOff, Tag } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { type Page } from "@/components/sidebar";
+import { cn } from "@/lib/utils";
 import {
   transactions,
   loyaltyMembers,
@@ -18,25 +19,34 @@ import {
   serviceRevenueData,
   weeklyRevenueData,
 } from "@/lib/data";
+import {
+  type ServiceType,
+  type AddOn,
+  type PricingType,
+  type PricingMode,
+  type PriceDisplayMode,
+  type LoadTier,
+  DEFAULT_SERVICE_TYPES,
+  DEFAULT_ADDONS,
+  DEFAULT_LOAD_TIERS,
+  loadServiceTypes,
+  persistServiceTypes,
+  loadAddOns,
+  persistAddOns,
+  loadPricingConfig,
+  persistPricingConfig,
+} from "@/lib/settings-store";
 
 // ─── Pricing ────────────────────────────────────────────────────────────────
-type PricingMode = "per-kg" | "per-load" | "both";
-
-const DEFAULT_LOAD_TIERS = [
-  { id: "1", name: "Small Load",          range: "below 4 kg",    price: "80"  },
-  { id: "2", name: "Medium Load",         range: "4 kg – 7 kg",   price: "120" },
-  { id: "3", name: "Large Load",          range: "7 kg – 10 kg",  price: "180" },
-  { id: "4", name: "Bulk / Commercial",   range: "10 kg+",        price: "250" },
-];
 
 function PricingSettings() {
-  // Base pricing
-  const [pricingMode, setPricingMode]   = useState<PricingMode>("per-kg");
-  const [pricePerKg, setPricePerKg]     = useState("30");
-  const [minWeight, setMinWeight]       = useState("");
+  // Base pricing — initialised from shared store
+  const [pricingMode, setPricingMode]   = useState<PricingMode>(() => loadPricingConfig().pricingMode);
+  const [pricePerKg, setPricePerKg]     = useState(() => loadPricingConfig().pricePerKg);
+  const [minWeight, setMinWeight]       = useState(() => loadPricingConfig().minWeight);
 
-  // Load tiers
-  const [loadTiers, setLoadTiers] = useState(DEFAULT_LOAD_TIERS);
+  // Load tiers — initialised from shared store
+  const [loadTiers, setLoadTiers] = useState<LoadTier[]>(() => loadPricingConfig().loadTiers);
   const [showAddTier, setShowAddTier]   = useState(false);
   const [newTierName, setNewTierName]   = useState("");
   const [newTierRange, setNewTierRange] = useState("");
@@ -47,22 +57,24 @@ function PricingSettings() {
   const [customMilestone, setCustomMilestone] = useState("10");
   const [customReward, setCustomReward]     = useState("");
 
-  // Add-ons
-  const [addOns, setAddOns] = useState([
-    { id: "1", name: "Fabcon",          rate: "10" },
-    { id: "2", name: "Express (+50%)",  rate: "50" },
-    { id: "3", name: "Bleach",          rate: "15" },
-    { id: "4", name: "Starch",          rate: "20" },
-  ]);
+  // Add-ons — initialised from shared store
+  const [addOns, setAddOns] = useState<AddOn[]>(() => loadAddOns());
   const [newName, setNewName] = useState("");
   const [newRate, setNewRate] = useState("");
+
+  // Price display mode — initialised from shared store
+  const [priceDisplayMode, setPriceDisplayMode] = useState<PriceDisplayMode>(
+    () => loadPricingConfig().priceDisplayMode ?? "show"
+  );
 
   // Save state
   const [saved, setSaved] = useState(false);
 
   const addAddon = () => {
     if (!newName || !newRate) return;
-    setAddOns((prev) => [...prev, { id: Date.now().toString(), name: newName, rate: newRate }]);
+    const next: AddOn[] = [...addOns, { id: Date.now().toString(), name: newName, rate: newRate }];
+    setAddOns(next);
+    persistAddOns(next);
     setNewName(""); setNewRate("");
   };
 
@@ -83,6 +95,7 @@ function PricingSettings() {
   ];
 
   return (
+    <>
     <div className="space-y-5 w-full max-w-xl">
 
       {/* ── Base Pricing ─────────────────────────────────────────────────── */}
@@ -312,7 +325,11 @@ function PricingSettings() {
               <div key={a.id} className="flex items-center gap-2 bg-muted/30 rounded-md px-3 py-2">
                 <span className="flex-1 text-sm text-foreground">{a.name}</span>
                 <span className="text-sm text-muted-foreground">₱{a.rate}</span>
-                <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => setAddOns((prev) => prev.filter((x) => x.id !== a.id))}>
+                <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => {
+                  const next = addOns.filter((x) => x.id !== a.id);
+                  setAddOns(next);
+                  persistAddOns(next);
+                }}>
                   <Trash2 className="w-3.5 h-3.5" />
                 </Button>
               </div>
@@ -328,73 +345,125 @@ function PricingSettings() {
         </CardContent>
       </Card>
 
-      {/* ── Save ─────────────────────────────────────────────────────────── */}
-      <div>
-        {saved && (
-          <div className="flex items-center gap-2 text-green-700 bg-green-50 border border-green-200 rounded-lg px-4 py-2.5 text-sm mb-3 animate-in fade-in slide-in-from-top-1">
-            <CheckCircle2 className="w-4 h-4 shrink-0" />
-            Pricing settings saved!
-          </div>
-        )}
-        <Button
-          size="sm"
-          onClick={() => { setSaved(true); setTimeout(() => setSaved(false), 3000); }}
-          className="flex items-center gap-1.5"
-        >
-          <Save className="w-3.5 h-3.5" /> Save Settings
-        </Button>
-      </div>
+      {/* ── Price Display Settings ───────────────────────────────────────── */}
+      <Card className="border border-border shadow-none">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm">Price Display Settings</CardTitle>
+          <CardDescription className="text-xs">Control how prices appear to staff during transaction entry.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {(() => {
+            const DISPLAY_MODES: {
+              value: PriceDisplayMode;
+              icon: React.ReactNode;
+              label: string;
+              description: string;
+            }[] = [
+              {
+                value: "show",
+                icon: <Eye className="w-5 h-5" />,
+                label: "Show Price",
+                description: "Staff sees the price on each Wash Type and Load Size button, and the fee updates live as they fill out the form.",
+              },
+              {
+                value: "free",
+                icon: <Tag className="w-5 h-5" />,
+                label: "No Price / Free",
+                description: "All fees are set to ₱0. Useful for promo days or owner use. No prices are shown on buttons.",
+              },
+              {
+                value: "hide",
+                icon: <EyeOff className="w-5 h-5" />,
+                label: "Hide Price",
+                description: "Prices are kept but hidden from buttons and the live preview. Staff only sees the total on the final confirmation step.",
+              },
+            ];
+
+            return (
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                {DISPLAY_MODES.map(({ value, icon, label, description }) => {
+                  const active = priceDisplayMode === value;
+                  return (
+                    <button
+                      key={value}
+                      onClick={() => setPriceDisplayMode(value)}
+                      className={[
+                        "flex flex-col items-start gap-2 rounded-xl border-2 p-4 text-left transition-all cursor-pointer",
+                        active
+                          ? "border-primary bg-primary/5 shadow-sm"
+                          : "border-border bg-background hover:border-primary/40 hover:bg-muted/20",
+                      ].join(" ")}
+                    >
+                      <div className={[
+                        "w-9 h-9 rounded-full flex items-center justify-center shrink-0",
+                        active ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground",
+                      ].join(" ")}>
+                        {icon}
+                      </div>
+                      <div className="space-y-0.5">
+                        <p className={["text-sm font-semibold leading-tight", active ? "text-primary" : "text-foreground"].join(" ")}>
+                          {label}
+                        </p>
+                        <p className="text-[11px] text-muted-foreground leading-snug">{description}</p>
+                      </div>
+                      {active && (
+                        <span className="mt-auto text-[10px] font-semibold uppercase tracking-wider text-primary">Active</span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            );
+          })()}
+        </CardContent>
+      </Card>
+
+      {/* bottom spacer so content isn't hidden behind sticky bar */}
+      <div className="h-16" />
     </div>
+
+    {/* ── Sticky Save Bar ──────────────────────────────────────────────────── */}
+    <div className="sticky bottom-0 z-10 bg-background border-t border-border px-0 py-3 mt-0 flex items-center justify-between gap-3">
+      {saved ? (
+        <div className="flex items-center gap-2 text-green-700 bg-green-50 border border-green-200 rounded-lg px-4 py-2 text-sm animate-in fade-in slide-in-from-bottom-1">
+          <CheckCircle2 className="w-4 h-4 shrink-0" />
+          Pricing settings saved!
+        </div>
+      ) : (
+        <p className="text-xs text-muted-foreground">Changes are not saved until you click Save.</p>
+      )}
+      <Button
+        size="sm"
+        onClick={() => {
+          persistPricingConfig({ pricePerKg, minWeight, pricingMode, loadTiers, priceDisplayMode });
+          persistAddOns(addOns);
+          setSaved(true);
+          setTimeout(() => setSaved(false), 3000);
+        }}
+        className="flex items-center gap-1.5 shrink-0"
+      >
+        <Save className="w-3.5 h-3.5" /> Save Changes
+      </Button>
+    </div>
+    </>
   );
 }
 
 // ─── Service Types ───────────────────────────────────────────────────────────
-type PricingType = "per-kg" | "per-load" | "flat-rate";
-
-interface ServiceType {
-  id: string;
-  name: string;
-  description: string;
-  price: string;
-  pricingType: PricingType;
-  active: boolean;
-}
 
 const PRICING_TYPE_LABELS: Record<PricingType, string> = {
   "per-kg":    "Per kg",
   "per-load":  "Per load",
-  "flat-rate": "Flat rate",
+  "per-piece": "Per piece",
 };
 
-const LS_KEY = "laundrytrack_service_types";
-
-const DEFAULT_SERVICES: ServiceType[] = [
-  { id: "1", name: "Regular",           description: "Standard wash & dry",              price: "30",  pricingType: "per-kg",   active: true  },
-  { id: "2", name: "Delicate",          description: "Gentle cycle for delicate fabrics", price: "40",  pricingType: "per-kg",   active: true  },
-  { id: "3", name: "Express",           description: "Same-day turnaround",               price: "50",  pricingType: "per-kg",   active: true  },
-  { id: "4", name: "Bulk / Commercial", description: "For 10kg and above",                price: "250", pricingType: "per-load", active: false },
-];
-
-function loadServices(): ServiceType[] {
-  if (typeof window === "undefined") return DEFAULT_SERVICES;
-  try {
-    const raw = localStorage.getItem(LS_KEY);
-    if (raw) return JSON.parse(raw) as ServiceType[];
-  } catch { /* ignore */ }
-  return DEFAULT_SERVICES;
-}
-
-function persistServices(list: ServiceType[]) {
-  try { localStorage.setItem(LS_KEY, JSON.stringify(list)); } catch { /* ignore */ }
-}
-
 function ServiceTypesSettings() {
-  const [services, setServices] = useState<ServiceType[]>(loadServices);
+  const [services, setServices] = useState<ServiceType[]>(loadServiceTypes);
 
   // Helper: update state + persist in one call
   const updateServices = (next: ServiceType[]) => {
     setServices(next);
-    persistServices(next);
+    persistServiceTypes(next);
   };
 
   // Add-new form
@@ -402,6 +471,8 @@ function ServiceTypesSettings() {
   const [newDesc, setNewDesc]               = useState("");
   const [newPrice, setNewPrice]             = useState("");
   const [newPricingType, setNewPricingType] = useState<PricingType>("per-kg");
+  const [newShowInTxn, setNewShowInTxn]     = useState(true);
+  const [newShowPrice, setNewShowPrice]     = useState(true);
 
   // Edit modal
   const [editTarget, setEditTarget]         = useState<ServiceType | null>(null);
@@ -410,6 +481,7 @@ function ServiceTypesSettings() {
   const [editPrice, setEditPrice]           = useState("");
   const [editPricingType, setEditPricingType] = useState<PricingType>("per-kg");
   const [editActive, setEditActive]         = useState(true);
+  const [editShowPrice, setEditShowPrice]   = useState(true);
 
   // Toasts
   const [toast, setToast] = useState<string | null>(null);
@@ -425,13 +497,14 @@ function ServiceTypesSettings() {
     setEditPrice(s.price);
     setEditPricingType(s.pricingType);
     setEditActive(s.active);
+    setEditShowPrice(s.showPrice ?? true);
   };
 
   const saveEdit = () => {
     if (!editTarget) return;
     const next = services.map((s) =>
       s.id === editTarget.id
-        ? { ...s, name: editName, description: editDesc, price: editPrice, pricingType: editPricingType, active: editActive }
+        ? { ...s, name: editName, description: editDesc, price: editPrice, pricingType: editPricingType, active: editActive, showPrice: editShowPrice }
         : s
     );
     updateServices(next);
@@ -443,15 +516,24 @@ function ServiceTypesSettings() {
     if (!newName.trim() || !newPrice.trim()) return;
     const next = [
       ...services,
-      { id: Date.now().toString(), name: newName.trim(), description: newDesc.trim(), price: newPrice.trim(), pricingType: newPricingType, active: true },
+      {
+        id: Date.now().toString(),
+        name: newName.trim(),
+        description: newDesc.trim(),
+        price: newPrice.trim(),
+        pricingType: newPricingType,
+        active: newShowInTxn,
+        showPrice: newShowPrice,
+      },
     ];
     updateServices(next);
     setNewName(""); setNewDesc(""); setNewPrice(""); setNewPricingType("per-kg");
+    setNewShowInTxn(true); setNewShowPrice(true);
     showToast("Service type added successfully!");
   };
 
   const handleSaveAll = () => {
-    persistServices(services);
+    persistServiceTypes(services);
     showToast("All service types saved successfully!");
   };
 
@@ -475,31 +557,71 @@ function ServiceTypesSettings() {
         </CardHeader>
         <CardContent className="space-y-2">
           {services.map((s) => (
-            <div key={s.id} className="flex items-center gap-3 bg-muted/30 rounded-md px-3 py-2.5">
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <p className="text-sm font-medium text-foreground">{s.name}</p>
-                  <span className="text-xs font-semibold text-primary">₱{s.price}</span>
-                  <span className="text-[10px] text-muted-foreground bg-muted rounded-full px-2 py-0.5">
-                    {PRICING_TYPE_LABELS[s.pricingType]}
-                  </span>
-                </div>
-                {s.description && <p className="text-xs text-muted-foreground truncate">{s.description}</p>}
+            <div
+              key={s.id}
+              className={cn(
+                "rounded-md px-3 py-2.5 space-y-2 transition-opacity duration-150",
+                s.active ? "bg-muted/30" : "bg-muted/10 opacity-60"
+              )}
+            >
+              {/* Top row: name + badges */}
+              <div className="flex items-start gap-2 flex-wrap">
+                <p className="text-sm font-semibold text-foreground">{s.name}</p>
+                {s.active && (s.showPrice ?? true) && (
+                  <span className="text-xs font-semibold text-primary bg-primary/10 rounded-full px-2 py-0.5">₱{s.price}</span>
+                )}
+                <span className="text-[10px] font-medium text-muted-foreground bg-muted rounded-full px-2 py-0.5 border border-border">
+                  {PRICING_TYPE_LABELS[s.pricingType] ?? s.pricingType}
+                </span>
               </div>
-              <Switch
-                checked={s.active}
-                onCheckedChange={(v) => updateServices(services.map((x) => x.id === s.id ? { ...x, active: v } : x))}
-              />
-              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(s)}>
-                <Edit className="w-3.5 h-3.5" />
-              </Button>
-              <Button
-                variant="ghost" size="icon"
-                className="h-7 w-7 text-destructive hover:text-destructive"
-                onClick={() => updateServices(services.filter((x) => x.id !== s.id))}
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-              </Button>
+              {s.description && <p className="text-xs text-muted-foreground">{s.description}</p>}
+
+              {/* Bottom row: toggles + actions */}
+              <div className="flex items-center gap-3 flex-wrap">
+                {/* Toggle 1: Show in Transaction — turning OFF also forces showPrice OFF */}
+                <div className="flex items-center gap-1.5">
+                  <Switch
+                    checked={s.active}
+                    onCheckedChange={(v) =>
+                      updateServices(services.map((x) =>
+                        x.id === s.id
+                          ? { ...x, active: v, showPrice: v ? (x.showPrice ?? true) : false }
+                          : x
+                      ))
+                    }
+                    className="scale-90"
+                  />
+                  <span className="text-[11px] text-muted-foreground font-medium">Show</span>
+                </div>
+                {/* Toggle 2: Show Price — disabled, dimmed, and has tooltip when Show is OFF */}
+                <div
+                  className={cn(
+                    "flex items-center gap-1.5 transition-opacity duration-150",
+                    !s.active && "opacity-40 pointer-events-none cursor-not-allowed"
+                  )}
+                  title={!s.active ? "Enable Show first to configure Price" : undefined}
+                >
+                  <Switch
+                    checked={(s.showPrice ?? true) && s.active}
+                    onCheckedChange={(v) => updateServices(services.map((x) => x.id === s.id ? { ...x, showPrice: v } : x))}
+                    disabled={!s.active}
+                    className="scale-90"
+                  />
+                  <span className="text-[11px] text-muted-foreground font-medium">Price</span>
+                </div>
+                {/* Spacer */}
+                <div className="flex-1" />
+                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(s)}>
+                  <Edit className="w-3.5 h-3.5" />
+                </Button>
+                <Button
+                  variant="ghost" size="icon"
+                  className="h-7 w-7 text-destructive hover:text-destructive"
+                  onClick={() => updateServices(services.filter((x) => x.id !== s.id))}
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </Button>
+              </div>
             </div>
           ))}
 
@@ -545,9 +667,19 @@ function ServiceTypesSettings() {
                   <SelectContent>
                     <SelectItem value="per-kg">Per kg</SelectItem>
                     <SelectItem value="per-load">Per load</SelectItem>
-                    <SelectItem value="flat-rate">Flat rate</SelectItem>
+                    <SelectItem value="per-piece">Per piece</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+            </div>
+            <div className="flex items-center gap-4 pt-1">
+              <div className="flex items-center gap-2">
+                <Switch checked={newShowInTxn} onCheckedChange={setNewShowInTxn} />
+                <Label className="text-xs text-muted-foreground">Show in Transaction</Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <Switch checked={newShowPrice} onCheckedChange={setNewShowPrice} />
+                <Label className="text-xs text-muted-foreground">Show Price</Label>
               </div>
             </div>
             <Button size="sm" className="h-8 gap-1.5 mt-1" onClick={handleAdd} disabled={!canAdd}>
@@ -567,6 +699,9 @@ function ServiceTypesSettings() {
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle className="text-base">Edit Service Type</DialogTitle>
+            <DialogDescription className="sr-only">
+              Edit the name, description, price, and settings for this service type.
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-3 pt-1">
             <div>
@@ -603,14 +738,20 @@ function ServiceTypesSettings() {
                   <SelectContent>
                     <SelectItem value="per-kg">Per kg</SelectItem>
                     <SelectItem value="per-load">Per load</SelectItem>
-                    <SelectItem value="flat-rate">Flat rate</SelectItem>
+                    <SelectItem value="per-piece">Per piece</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             </div>
-            <div className="flex items-center justify-between bg-muted/30 rounded-md px-3 py-2.5">
-              <Label className="text-sm">Active</Label>
-              <Switch checked={editActive} onCheckedChange={setEditActive} />
+            <div className="grid grid-cols-2 gap-2">
+              <div className="flex items-center justify-between bg-muted/30 rounded-md px-3 py-2.5">
+                <Label className="text-sm">Show</Label>
+                <Switch checked={editActive} onCheckedChange={setEditActive} />
+              </div>
+              <div className="flex items-center justify-between bg-muted/30 rounded-md px-3 py-2.5">
+                <Label className="text-sm">Price</Label>
+                <Switch checked={editShowPrice} onCheckedChange={setEditShowPrice} />
+              </div>
             </div>
             <div className="flex gap-2 pt-1">
               <Button

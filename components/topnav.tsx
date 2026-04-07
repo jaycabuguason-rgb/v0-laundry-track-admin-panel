@@ -39,9 +39,12 @@ const pageTitles: Record<Page, string> = {
 
 const notifTypeColors: Record<Notification["type"], string> = {
   ready:     "bg-green-100 text-green-700",
-  claim:     "bg-blue-100 text-blue-700",
   unclaimed: "bg-orange-100 text-orange-700",
-  override:  "bg-red-100 text-red-700",
+};
+
+const notifTypeLabels: Record<Notification["type"], string> = {
+  ready:     "READY",
+  unclaimed: "UNCLAIMED",
 };
 
 interface TopNavProps {
@@ -50,12 +53,16 @@ interface TopNavProps {
   onSignOut: () => void;
   adminProfile: AdminProfile;
   onMenuToggle: () => void;
+  onTransactionDetail?: (ticketId: string) => void;
 }
 
-export default function TopNav({ activePage, onNavigate, onSignOut, adminProfile, onMenuToggle }: TopNavProps) {
+export default function TopNav({ activePage, onNavigate, onSignOut, adminProfile, onMenuToggle, onTransactionDetail }: TopNavProps) {
   const [notifications, setNotifications] = useState<Notification[]>(initialNotifications);
   const [notifOpen, setNotifOpen] = useState(false);
   const [signOutOpen, setSignOutOpen] = useState(false);
+
+  // Badge only counts READY + UNCLAIMED
+  const badgeCount = notifications.filter((n) => n.type === "ready" || n.type === "unclaimed").length;
 
   const dismiss = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -64,10 +71,10 @@ export default function TopNav({ activePage, onNavigate, onSignOut, adminProfile
 
   const viewNotif = (notif: Notification, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (notif.type === "ready" || notif.type === "unclaimed") {
+    if (onTransactionDetail) {
+      onTransactionDetail(notif.ticketId);
+    } else {
       onNavigate("transactions");
-    } else if (notif.type === "claim" || notif.type === "override") {
-      onNavigate("claim-verification");
     }
     setNotifOpen(false);
   };
@@ -95,9 +102,9 @@ export default function TopNav({ activePage, onNavigate, onSignOut, adminProfile
           <DropdownMenuTrigger asChild>
             <button className="relative p-2 rounded-md cursor-pointer hover:bg-accent transition-colors active:scale-95 min-h-[44px] min-w-[44px] flex items-center justify-center">
               <Bell className="w-4 h-4 text-muted-foreground" />
-              {notifications.length > 0 && (
+              {badgeCount > 0 && (
                 <Badge className="absolute -top-0.5 -right-0.5 h-4 w-4 p-0 flex items-center justify-center text-[10px] bg-primary text-primary-foreground border-0">
-                  {notifications.length}
+                  {badgeCount}
                 </Badge>
               )}
             </button>
@@ -109,7 +116,7 @@ export default function TopNav({ activePage, onNavigate, onSignOut, adminProfile
           >
             <div className="flex items-center justify-between px-4 py-3 border-b border-border">
               <p className="text-xs font-semibold text-foreground">Notifications</p>
-              <span className="text-[11px] text-muted-foreground">{notifications.length} unread</span>
+              <span className="text-[11px] text-muted-foreground">{badgeCount} unread</span>
             </div>
 
             {notifications.length === 0 ? (
@@ -124,10 +131,11 @@ export default function TopNav({ activePage, onNavigate, onSignOut, adminProfile
                     className="flex items-start gap-3 px-4 py-3 border-b border-border last:border-0 hover:bg-muted/30 transition-colors"
                   >
                     <div className="flex-1 min-w-0">
-                      <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold mb-1 ${notifTypeColors[notif.type]}`}>
-                        {notif.type.toUpperCase()}
+                      <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-bold mb-1 tracking-wide ${notifTypeColors[notif.type]}`}>
+                        {notifTypeLabels[notif.type]}
                       </span>
-                      <p className="text-xs text-foreground leading-snug">{notif.message}</p>
+                      <p className="text-xs font-semibold text-foreground leading-tight">{notif.ticketId}</p>
+                      <p className="text-[11px] text-muted-foreground leading-snug">{notif.customerName}</p>
                       <p className="text-[11px] text-muted-foreground mt-0.5">{notif.time}</p>
                     </div>
                     <div className="flex flex-col gap-1 shrink-0">

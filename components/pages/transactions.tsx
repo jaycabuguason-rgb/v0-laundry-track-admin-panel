@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import {
-  Search, Eye, Edit, Ban, Printer, ChevronRight, X, QrCode, CalendarIcon,
+  Search, Eye, EyeOff, Edit, Ban, Printer, ChevronRight, X, QrCode, CalendarIcon,
   Undo2, Redo2, AlertTriangle, Plus, User, Star, Camera, CameraOff,
   ChevronLeft, Check, RefreshCw,
 } from "lucide-react";
@@ -25,9 +25,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { transactions as initialTxns, loyaltyMembers, statusColors, statusOrder, type Transaction, type LoyaltyMember } from "@/lib/data";
+import { transactions as initialTxns, loyaltyMembers, statusColors, statusOrder, type Transaction, type PaymentStatus, type LoyaltyMember } from "@/lib/data";
+import {
+  type ServiceType,
+  type AddOn,
+  type PricingMode,
+  type PriceDisplayMode,
+  type LoadTier,
+  loadServiceTypes,
+  loadAddOns,
+  loadPricingConfig,
+} from "@/lib/settings-store";
 import { cn } from "@/lib/utils";
 import { Textarea } from "@/components/ui/textarea";
+import { PrintReceiptModal } from "@/components/print-receipt-modal";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // QR Scanner (inline, no package)
@@ -208,10 +219,10 @@ interface WizardForm {
   weight: string;
   addOns: string[];
   washInstructions: string;
+  paymentStatus: PaymentStatus;
 }
 
-const WASH_TYPES = ["Regular", "Express", "Delicate"];
-const ADD_ON_OPTIONS = ["Fabcon", "Bleach", "Starch", "Express (+50%)"];
+// Wash types and add-ons are loaded dynamically from settings (see wizard state below)
 
 function NewTransactionWizard({
   open,
@@ -222,6 +233,26 @@ function NewTransactionWizard({
   onClose: () => void;
   onSubmit: (txn: Omit<Transaction, "id" | "ticketId">) => void;
 }) {
+  // Dynamic settings loaded from shared store
+  const [serviceTypes, setServiceTypes]   = useState<ServiceType[]>([]);
+  const [addOnOptions, setAddOnOptions]   = useState<AddOn[]>([]);
+  const [minWeight, setMinWeightSetting]  = useState("0");
+  const [pricingMode, setPricingModeSetting] = useState<PricingMode>("per-kg");
+  const [loadTiers, setLoadTiersSetting]  = useState<LoadTier[]>([]);
+  // For "both" mode — which method staff picks for this transaction (persisted across opens)
+  const [chargingMode, setChargingMode] = useState<"per-kg" | "per-load">(() => {
+    if (typeof window === "undefined") return "per-kg";
+    return (sessionStorage.getItem("lt_charging_mode") as "per-kg" | "per-load") || "per-kg";
+  });
+  const updateChargingMode = (mode: "per-kg" | "per-load") => {
+    setChargingMode(mode);
+    if (typeof window !== "undefined") sessionStorage.setItem("lt_charging_mode", mode);
+  };
+  // For per-load mode — selected tier id
+  const [selectedTierId, setSelectedTierId] = useState<string>("");
+  // Price display mode from settings
+  const [priceDisplayMode, setPriceDisplayMode] = useState<PriceDisplayMode>("show");
+
   const [step, setStep] = useState(1);
   const [form, setForm] = useState<WizardForm>({
     customerType: "walkin",
@@ -229,10 +260,11 @@ function NewTransactionWizard({
     phone: "",
     arrivalDateTime: format(new Date(), "yyyy-MM-dd HH:mm"),
     loyaltyMember: null,
-    washType: "Regular",
+    washType: "",
     weight: "",
     addOns: [],
     washInstructions: "",
+    paymentStatus: "unpaid",
   });
 
   // Loyalty search state
@@ -242,9 +274,22 @@ function NewTransactionWizard({
   const [manualError, setManualError]       = useState("");
   const [showScanner, setShowScanner]       = useState(false);
 
-  // Reset when dialog opens
+  // Reset when dialog opens — also re-read settings so changes in Settings tab are reflected
   useEffect(() => {
     if (open) {
+      // Load all active services — filtering by pricingType happens at render time based on effectiveMode
+      const enabledServices = loadServiceTypes().filter((s) => s.active);
+      const addOns = loadAddOns();
+      const pricingCfg = loadPricingConfig();
+      setServiceTypes(enabledServices);
+      setAddOnOptions(addOns);
+      setMinWeightSetting(pricingCfg.minWeight || "0");
+      setPricingModeSetting(pricingCfg.pricingMode);
+      setLoadTiersSetting(pricingCfg.loadTiers);
+      // chargingMode intentionally NOT reset — persists from sessionStorage
+      setSelectedTierId(pricingCfg.loadTiers[0]?.id ?? "");
+      setPriceDisplayMode(pricingCfg.priceDisplayMode ?? "show");
+
       setStep(1);
       setForm({
         customerType: "walkin",
@@ -252,10 +297,11 @@ function NewTransactionWizard({
         phone: "",
         arrivalDateTime: format(new Date(), "yyyy-MM-dd HH:mm"),
         loyaltyMember: null,
-        washType: "Regular",
+        washType: enabledServices[0]?.name ?? "",
         weight: "",
         addOns: [],
         washInstructions: "",
+        paymentStatus: "unpaid",
       });
       setMemberSearch("");
       setMemberSearchRes([]);
@@ -300,31 +346,61 @@ function NewTransactionWizard({
   const toggleAddOn = (ao: string) =>
     setForm((f) => ({ ...f, addOns: f.addOns.includes(ao) ? f.addOns.filter((x) => x !== ao) : [...f.addOns, ao] }));
 
-  const computeFee = () => {
-    const w = parseFloat(form.weight) || 0;
-    const base = w * 30;
-    const hasExpress = form.washType === "Express" || form.addOns.includes("Express (+50%)");
-    return Math.round(base * (hasExpress ? 1.5 : 1));
-  };
+  // ── Derived pricing context ────────────────────────────────────────────────
+  // Effective mode for this transaction
+  const effectiveMode: "per-kg" | "per-load" =
+    pricingMode === "both" ? chargingMode : (pricingMode === "per-load" ? "per-load" : "per-kg");
+
+  const selectedService = serviceTypes.find((s) => s.name === form.washType);
+  const selectedTier    = loadTiers.find((t) => t.id === selectedTierId);
+  const weight          = parseFloat(form.weight) || 0;
+  const minWeightNum    = parseFloat(minWeight) || 0;
+
+  // ── Fee calculation ────────────────────────────────────────────────────────
+  let baseFee = 0;
+  if (effectiveMode === "per-load" && selectedTier) {
+    baseFee = parseFloat(selectedTier.price) || 0;
+  } else if (effectiveMode === "per-kg" && selectedService) {
+    const pricePerUnit = parseFloat(selectedService.price) || 0;
+    baseFee = Math.round(weight * pricePerUnit);
+  }
+
+  const addOnTotal = form.addOns.reduce((sum, name) => {
+    const found = addOnOptions.find((a) => a.name === name);
+    return sum + (parseFloat(found?.rate ?? "0") || 0);
+  }, 0);
+
+  const totalFee = priceDisplayMode === "free" ? 0 : (baseFee + addOnTotal);
+
+  const computeFee = () => totalFee;
 
   const step1Valid =
     form.customerType === "walkin"
       ? form.customerName.trim().length > 0
       : form.loyaltyMember !== null;
 
-  const step2Valid = form.washType && parseFloat(form.weight) > 0;
+  const step2Valid =
+    effectiveMode === "per-load"
+      ? !!selectedTierId
+      : (!!form.washType && weight > 0 && weight >= minWeightNum && serviceTypes.some((s) => s.active && (s.pricingType === "per-kg" || s.pricingType === "per-piece")));
 
   const handleSubmit = () => {
     const fee = computeFee();
+    // For per-load, the "wash type" shown in the summary is the tier name
+    const displayWashType =
+      effectiveMode === "per-load" && selectedTier
+        ? selectedTier.name
+        : form.washType;
     onSubmit({
       customerName: form.customerName,
       phone: form.phone,
       arrivalDateTime: form.arrivalDateTime,
       dropOffDate: form.arrivalDateTime.split(" ")[0],
-      washType: form.washType,
-      weight: parseFloat(form.weight),
+      washType: displayWashType,
+      weight: effectiveMode === "per-load" ? 0 : parseFloat(form.weight),
       fee,
       status: "Received",
+      paymentStatus: form.paymentStatus,
       addOns: form.addOns,
       washInstructions: form.washInstructions,
     });
@@ -501,86 +577,264 @@ function NewTransactionWizard({
   );
 
   // ── Step 2: Service Details ───────────────────────────────────────────────
-  const renderStep2 = () => (
-    <div className="space-y-4">
-      <div>
-        <label className="text-xs font-medium text-foreground block mb-1.5">
-          Wash Type <span className="text-destructive">*</span>
-        </label>
-        <div className="grid grid-cols-3 gap-2">
-          {WASH_TYPES.map((wt) => (
-            <button
-              key={wt}
-              onClick={() => setForm((f) => ({ ...f, washType: wt }))}
-              className={cn(
-                "rounded-lg border-2 py-2.5 text-sm font-medium transition-all cursor-pointer",
-                form.washType === wt
-                  ? "border-primary bg-primary/5 text-primary"
-                  : "border-border bg-background hover:border-primary/40 text-foreground"
+  const renderStep2 = () => {
+    // Filter services by the effective charging mode's pricingType
+    const perKgServices  = serviceTypes.filter((s) => s.pricingType === "per-kg" || s.pricingType === "per-piece");
+    const perLoadServices = serviceTypes.filter((s) => s.pricingType === "per-load");
+    const visibleServices = effectiveMode === "per-load" ? perLoadServices : perKgServices;
+    const svcCols = visibleServices.length <= 2 ? visibleServices.length || 1 : visibleServices.length === 4 ? 2 : 3;
+
+    // Fee preview is hidden entirely when priceDisplayMode is "hide"; "free" shows ₱0
+    const showFeePreview =
+      priceDisplayMode !== "hide" &&
+      (effectiveMode === "per-load" ? !!selectedTierId : (weight > 0 && !!form.washType));
+    // Global price label override — per-service showPrice is respected unless global mode forces hide/free
+    const globalHidePrice = priceDisplayMode === "free" || priceDisplayMode === "hide";
+
+    // Shared add-ons + wash instructions + fee breakdown block
+    const renderAddOnsAndFee = () => (
+      <>
+        {/* Add-ons */}
+        {addOnOptions.length > 0 && (
+          <div>
+            <label className="text-xs font-medium text-foreground block mb-1.5">Add-ons</label>
+            <div className="flex flex-wrap gap-2">
+              {addOnOptions.map((ao) => (
+                <button
+                  key={ao.id}
+                  onClick={() => toggleAddOn(ao.name)}
+                  className={cn(
+                    "px-3 py-1.5 rounded-full border text-xs font-medium transition-all cursor-pointer",
+                    form.addOns.includes(ao.name)
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "bg-background border-border text-foreground hover:border-primary/40"
+                  )}
+                >
+                  {form.addOns.includes(ao.name) && <Check className="w-3 h-3 inline mr-1" />}
+                  {ao.name}
+                  {!globalHidePrice && <span className="ml-1 opacity-70">+₱{ao.rate}</span>}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Wash Instructions */}
+        <div>
+          <label className="text-xs font-medium text-foreground block mb-1.5">Wash Instructions</label>
+          <Textarea
+            placeholder="Special instructions…"
+            value={form.washInstructions}
+            onChange={(e) => setForm((f) => ({ ...f, washInstructions: e.target.value }))}
+            className="text-sm resize-none"
+            rows={2}
+          />
+        </div>
+
+        {/* Live fee breakdown — hidden in "hide" mode, always ₱0 in "free" mode */}
+        {showFeePreview && (
+          <div className="bg-primary/5 border border-primary/20 rounded-lg px-4 py-3 space-y-2">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Fee Breakdown</p>
+            {priceDisplayMode === "free" ? (
+              <div className="flex items-center justify-between border-t border-primary/20 pt-2">
+                <span className="text-sm font-semibold">Total</span>
+                <span className="text-lg font-bold text-primary">₱0</span>
+              </div>
+            ) : (
+              <>
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">
+                      Base fee
+                      {effectiveMode === "per-kg" && selectedService && weight > 0 && (
+                        <span className="text-xs ml-1 text-muted-foreground/70">
+                          ({weight} kg × ₱{selectedService.price})
+                        </span>
+                      )}
+                      {effectiveMode === "per-load" && selectedTier && (
+                        <span className="text-xs ml-1 text-muted-foreground/70">
+                          ({selectedTier.name})
+                        </span>
+                      )}
+                    </span>
+                    <span className="font-medium text-foreground">₱{baseFee}</span>
+                  </div>
+                  {form.addOns.map((name) => {
+                    const ao = addOnOptions.find((a) => a.name === name);
+                    return ao ? (
+                      <div key={name} className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">{name}</span>
+                        <span className="font-medium text-foreground">+₱{ao.rate}</span>
+                      </div>
+                    ) : null;
+                  })}
+                  {form.addOns.length > 0 && (
+                    <div className="flex items-center justify-between text-xs text-muted-foreground pt-0.5 border-t border-primary/10">
+                      <span>Add-ons total</span>
+                      <span>+₱{addOnTotal}</span>
+                    </div>
+                  )}
+                </div>
+                <div className="flex items-center justify-between border-t border-primary/20 pt-2">
+                  <span className="text-sm font-semibold">Total</span>
+                  <span className="text-lg font-bold text-primary">₱{totalFee}</span>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+        {/* "hide" mode hint — shown when a service/tier is selected but fee is deferred to Step 3 */}
+        {priceDisplayMode === "hide" && (effectiveMode === "per-load" ? !!selectedTierId : (weight > 0 && !!form.washType)) && (
+          <div className="flex items-center gap-2 bg-muted/40 border border-border rounded-lg px-3 py-2.5 text-xs text-muted-foreground">
+            <EyeOff className="w-3.5 h-3.5 shrink-0" />
+            Fee will be shown on the next step before you confirm.
+          </div>
+        )}
+      </>
+    );
+
+    return (
+      <div className="space-y-4">
+
+        {/* ── "Both" mode — staff picks charging method ─────────────────── */}
+        {pricingMode === "both" && (
+          <div>
+            <label className="text-xs font-medium text-foreground block mb-1.5">Charge by</label>
+            <div className="grid grid-cols-2 gap-2">
+              {(["per-kg", "per-load"] as const).map((mode) => (
+                <button
+                  key={mode}
+                  onClick={() => {
+                    updateChargingMode(mode);
+                    if (mode === "per-kg") setSelectedTierId(loadTiers[0]?.id ?? "");
+                    else setForm((f) => ({ ...f, weight: "" }));
+                  }}
+                  className={cn(
+                    "rounded-lg border-2 py-2.5 text-sm font-medium transition-all cursor-pointer",
+                    chargingMode === mode
+                      ? "border-primary bg-primary/5 text-primary"
+                      : "border-border bg-background hover:border-primary/40 text-foreground"
+                  )}
+                >
+                  {mode === "per-kg" ? "Per Kilogram" : "Per Load"}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── Per Kg mode ───────────────────────────────────────────────── */}
+        {effectiveMode === "per-kg" && (
+          <>
+            {/* Wash Type — only per-kg and per-piece services */}
+            <div>
+              <label className="text-xs font-medium text-foreground block mb-1.5">
+                Wash Type <span className="text-destructive">*</span>
+              </label>
+              {visibleServices.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-xs text-muted-foreground">
+                  No service types enabled. Go to Settings → Service Types to enable at least one.
+                </div>
+              ) : (
+                <div className={cn("grid gap-2", svcCols === 2 ? "grid-cols-2" : "grid-cols-3")}>
+                  {visibleServices.map((svc) => {
+                    const showThisPrice = !globalHidePrice && (svc.showPrice ?? true);
+                    const unitLabel = svc.pricingType === "per-piece" ? "/pc" : "/kg";
+                    return (
+                      <button
+                        key={svc.id}
+                        onClick={() => setForm((f) => ({ ...f, washType: svc.name }))}
+                        className={cn(
+                          "rounded-lg border-2 py-2.5 px-3 text-sm font-medium transition-all cursor-pointer flex flex-col items-center gap-0.5",
+                          form.washType === svc.name
+                            ? "border-primary bg-primary/5 text-primary"
+                            : "border-border bg-background hover:border-primary/40 text-foreground"
+                        )}
+                      >
+                        <span>{svc.name}</span>
+                        {showThisPrice && (
+                          <span className={cn("text-[11px] font-normal", form.washType === svc.name ? "text-primary/70" : "text-muted-foreground")}>
+                            ₱{svc.price}{unitLabel}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
               )}
-            >
-              {wt}
-            </button>
-          ))}
-        </div>
-      </div>
+            </div>
 
-      <div>
-        <label className="text-xs font-medium text-foreground block mb-1.5">
-          Weight (kg) <span className="text-destructive">*</span>
-        </label>
-        <Input
-          type="number"
-          min="0.5"
-          step="0.1"
-          placeholder="e.g. 5.0"
-          value={form.weight}
-          onChange={(e) => setForm((f) => ({ ...f, weight: e.target.value }))}
-          className="h-9 text-sm"
-        />
-      </div>
-
-      <div>
-        <label className="text-xs font-medium text-foreground block mb-1.5">Add-ons</label>
-        <div className="flex flex-wrap gap-2">
-          {ADD_ON_OPTIONS.map((ao) => (
-            <button
-              key={ao}
-              onClick={() => toggleAddOn(ao)}
-              className={cn(
-                "px-3 py-1.5 rounded-full border text-xs font-medium transition-all cursor-pointer",
-                form.addOns.includes(ao)
-                  ? "bg-primary text-primary-foreground border-primary"
-                  : "bg-background border-border text-foreground hover:border-primary/40"
+            {/* Weight */}
+            <div>
+              <label className="text-xs font-medium text-foreground block mb-1.5">
+                Weight (kg) <span className="text-destructive">*</span>
+                {minWeightNum > 0 && (
+                  <span className="ml-1 text-muted-foreground font-normal">(min. {minWeightNum} kg)</span>
+                )}
+              </label>
+              <Input
+                type="number"
+                min={minWeightNum > 0 ? minWeightNum : 0.5}
+                step="0.1"
+                placeholder={minWeightNum > 0 ? `Min. ${minWeightNum} kg` : "e.g. 5.0"}
+                value={form.weight}
+                onChange={(e) => setForm((f) => ({ ...f, weight: e.target.value }))}
+                className="h-9 text-sm"
+              />
+              {minWeightNum > 0 && weight > 0 && weight < minWeightNum && (
+                <p className="text-xs text-destructive mt-1">Weight must be at least {minWeightNum} kg</p>
               )}
-            >
-              {form.addOns.includes(ao) && <Check className="w-3 h-3 inline mr-1" />}{ao}
-            </button>
-          ))}
-        </div>
+            </div>
+          </>
+        )}
+
+        {/* ── Per Load mode ─────────────────────────────────────────────── */}
+        {effectiveMode === "per-load" && (
+          <div>
+            <label className="text-xs font-medium text-foreground block mb-1.5">
+              Load Size <span className="text-destructive">*</span>
+            </label>
+            {loadTiers.length === 0 ? (
+              <div className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-xs text-muted-foreground">
+                No load tiers configured. Go to Settings → Pricing to add tiers.
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-2">
+                {loadTiers.map((tier) => (
+                  <button
+                    key={tier.id}
+                    onClick={() => setSelectedTierId(tier.id)}
+                    className={cn(
+                      "rounded-lg border-2 py-3 px-3 text-left transition-all cursor-pointer",
+                      selectedTierId === tier.id
+                        ? "border-primary bg-primary/5"
+                        : "border-border bg-background hover:border-primary/40"
+                    )}
+                  >
+                    <p className={cn("text-sm font-semibold leading-tight", selectedTierId === tier.id ? "text-primary" : "text-foreground")}>
+                      {tier.name}
+                    </p>
+                    {tier.range && (
+                      <p className="text-[11px] text-muted-foreground mt-0.5">{tier.range}</p>
+                    )}
+                    {!globalHidePrice && (
+                      <p className={cn("text-base font-bold mt-1", selectedTierId === tier.id ? "text-primary" : "text-foreground")}>
+                        ₱{tier.price}
+                      </p>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {renderAddOnsAndFee()}
       </div>
+    );
+  };
 
-      <div>
-        <label className="text-xs font-medium text-foreground block mb-1.5">Wash Instructions</label>
-        <Textarea
-          placeholder="Special instructions…"
-          value={form.washInstructions}
-          onChange={(e) => setForm((f) => ({ ...f, washInstructions: e.target.value }))}
-          className="text-sm resize-none"
-          rows={2}
-        />
-      </div>
-
-      {parseFloat(form.weight) > 0 && (
-        <div className="bg-primary/5 border border-primary/20 rounded-lg px-4 py-3 flex items-center justify-between">
-          <span className="text-sm text-muted-foreground">Estimated Fee</span>
-          <span className="text-lg font-bold text-primary">₱{computeFee()}</span>
-        </div>
-      )}
-    </div>
-  );
-
-  // ── Step 3: Summary & Receipt ─────────────────────────────────────────────
+  // ── Step 3: Summary & Receipt ───────────────────��─────────────────────────
   const renderStep3 = () => {
     const fee = computeFee();
     const isLoyalty = form.customerType === "loyalty" && form.loyaltyMember;
@@ -597,12 +851,16 @@ function NewTransactionWizard({
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Transaction Summary</p>
           <div className="grid grid-cols-2 gap-2 text-sm">
             {[
-              { label: "Customer",     value: form.customerName },
-              { label: "Phone",        value: form.phone || "—" },
-              { label: "Arrival",      value: form.arrivalDateTime },
-              { label: "Wash Type",    value: form.washType },
-              { label: "Weight",       value: `${form.weight} kg` },
-              { label: "Add-ons",      value: form.addOns.length ? form.addOns.join(", ") : "None" },
+              { label: "Customer",   value: form.customerName },
+              { label: "Phone",      value: form.phone || "—" },
+              { label: "Arrival",    value: form.arrivalDateTime },
+              effectiveMode === "per-load"
+                ? { label: "Load Size",  value: selectedTier ? `${selectedTier.name} (${selectedTier.range})` : "—" }
+                : { label: "Wash Type",  value: form.washType },
+              effectiveMode === "per-load"
+                ? { label: "Pricing",    value: "Per Load" }
+                : { label: "Weight",     value: `${form.weight} kg` },
+              { label: "Add-ons",    value: form.addOns.length ? form.addOns.join(", ") : "None" },
             ].map((row) => (
               <div key={row.label} className="bg-background/60 rounded-md p-2.5">
                 <p className="text-[10px] text-muted-foreground">{row.label}</p>
@@ -613,6 +871,36 @@ function NewTransactionWizard({
           <div className="bg-primary/5 border border-primary/20 rounded-lg px-4 py-3 flex items-center justify-between">
             <span className="text-sm font-medium">Total Fee</span>
             <span className="text-xl font-bold text-primary">₱{fee}</span>
+          </div>
+
+          {/* Payment Status */}
+          <div>
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Payment Status</p>
+            <div className="grid grid-cols-2 gap-2">
+              {(["unpaid", "paid"] as const).map((ps) => (
+                <button
+                  key={ps}
+                  onClick={() => setForm((f) => ({ ...f, paymentStatus: ps }))}
+                  className={cn(
+                    "rounded-lg border-2 py-3 px-4 text-sm font-semibold transition-all cursor-pointer flex flex-col items-center gap-0.5",
+                    ps === "unpaid"
+                      ? form.paymentStatus === "unpaid"
+                        ? "border-red-500 bg-red-50 text-red-600"
+                        : "border-border bg-background text-muted-foreground hover:border-red-300"
+                      : form.paymentStatus === "paid"
+                        ? "border-green-500 bg-green-50 text-green-600"
+                        : "border-border bg-background text-muted-foreground hover:border-green-300"
+                  )}
+                >
+                  {ps === "unpaid" ? "Unpaid" : "Paid"}
+                </button>
+              ))}
+            </div>
+            <p className="text-[11px] text-muted-foreground mt-2 leading-relaxed">
+              {form.paymentStatus === "unpaid"
+                ? "Payment will be recorded as pending. Customer receipt will show balance due."
+                : "Payment confirmed. Receipt will show as fully paid."}
+            </p>
           </div>
         </div>
 
@@ -746,9 +1034,12 @@ export default function TransactionsPage() {
   const [editTxn, setEditTxn]         = useState<Transaction | null>(null);
   const [editInstructions, setEditInstructions] = useState("");
   const [editStatus, setEditStatus]   = useState<Transaction["status"]>("Received");
+  const [editPaymentStatus, setEditPaymentStatus] = useState<PaymentStatus>("unpaid");
   const [voidTxn, setVoidTxn]         = useState<Transaction | null>(null);
   const [voidReason, setVoidReason]   = useState("");
   const [reprintTxn, setReprintTxn]   = useState<Transaction | null>(null);
+  const [printTxn, setPrintTxn]       = useState<Transaction | null>(null);
+  const [printPostCreate, setPrintPostCreate] = useState(false);
 
   // Toast
   const [toast, setToast] = useState<string | null>(null);
@@ -758,7 +1049,7 @@ export default function TransactionsPage() {
     setTimeout(() => setToast(null), 3200);
   };
 
-  // ── History helpers ──────────────────────────────────────────────────────
+  // ── History helpers ──────────────────────────────────────────────���───────
   const commit = (nextTxns: Transaction[], description: string) => {
     const entry: HistoryEntry = { prev: txns, next: nextTxns, description };
     const newHistory = [...history.slice(0, historyIdx + 1), entry].slice(-10);
@@ -810,7 +1101,7 @@ export default function TransactionsPage() {
   const saveInstructions = () => {
     if (!editTxn) return;
     const updated = txns.map((t) =>
-      t.id === editTxn.id ? { ...t, status: editStatus, washInstructions: editInstructions } : t
+      t.id === editTxn.id ? { ...t, status: editStatus, paymentStatus: editPaymentStatus, washInstructions: editInstructions } : t
     );
     commit(updated, `Edit ${editTxn.ticketId}`);
     showToast(`Ticket #${editTxn.ticketId} updated successfully`);
@@ -831,6 +1122,7 @@ export default function TransactionsPage() {
     setEditTxn(txn);
     setEditInstructions(txn.washInstructions || "");
     setEditStatus(txn.status);
+    setEditPaymentStatus(txn.paymentStatus);
   };
 
   const handleNewTransaction = (partial: Omit<Transaction, "id" | "ticketId">) => {
@@ -839,6 +1131,9 @@ export default function TransactionsPage() {
     const newTxn: Transaction = { id: newId, ticketId: newTicket, ...partial };
     commit([newTxn, ...txns], `New transaction ${newTicket}`);
     showToast(`Ticket #${newTicket} created for ${partial.customerName}`);
+    // Prompt to print receipt
+    setPrintTxn(newTxn);
+    setPrintPostCreate(true);
   };
 
   // ── Derived ──────────────────────────────────────────────────────────────
@@ -949,6 +1244,7 @@ export default function TransactionsPage() {
                 <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3 whitespace-nowrap hidden sm:table-cell">Weight</th>
                 <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3 whitespace-nowrap hidden md:table-cell">Wash Type</th>
                 <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3 whitespace-nowrap">Fee</th>
+                <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3 whitespace-nowrap hidden sm:table-cell">Payment</th>
                 <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3 whitespace-nowrap">Status</th>
                 <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3 whitespace-nowrap">Actions</th>
               </tr>
@@ -970,6 +1266,16 @@ export default function TransactionsPage() {
                     <td className={cn("px-4 py-3 text-xs text-muted-foreground hidden sm:table-cell", isVoided && "line-through")}>{txn.weight} kg</td>
                     <td className={cn("px-4 py-3 text-xs text-muted-foreground hidden md:table-cell", isVoided && "line-through")}>{txn.washType}</td>
                     <td className={cn("px-4 py-3 text-xs font-medium text-foreground", isVoided && "line-through")}>₱{txn.fee}</td>
+                    <td className="px-4 py-3 hidden sm:table-cell">
+                      <span className={cn(
+                        "inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap",
+                        txn.paymentStatus === "paid"
+                          ? "bg-green-50 text-green-700 border border-green-200"
+                          : "bg-red-50 text-red-600 border border-red-200"
+                      )}>
+                        {txn.paymentStatus === "paid" ? "Paid" : "Unpaid"}
+                      </span>
+                    </td>
                     <td className="px-4 py-3">
                       <span className={cn(
                         "inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium whitespace-nowrap",
@@ -995,7 +1301,7 @@ export default function TransactionsPage() {
                         >
                           <Ban className="w-3.5 h-3.5" />
                         </Button>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 hidden sm:flex" title="Reprint" onClick={() => setReprintTxn(txn)}>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 hidden sm:flex" title="Print Receipt" onClick={() => { setPrintTxn(txn); setPrintPostCreate(false); }}>
                           <Printer className="w-3.5 h-3.5" />
                         </Button>
                       </div>
@@ -1005,7 +1311,7 @@ export default function TransactionsPage() {
               })}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="text-center py-10 text-sm text-muted-foreground">
+                  <td colSpan={9} className="text-center py-10 text-sm text-muted-foreground">
                     No transactions found.
                   </td>
                 </tr>
@@ -1041,8 +1347,20 @@ export default function TransactionsPage() {
                     <p className="font-medium text-foreground text-xs mt-0.5">{row.value}</p>
                   </div>
                 ))}
+                {/* Payment Status */}
+                <div className="bg-muted/30 rounded-md p-2.5">
+                  <p className="text-[11px] text-muted-foreground mb-1">Payment Status</p>
+                  <span className={cn(
+                    "inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border",
+                    viewTxn.paymentStatus === "paid"
+                      ? "bg-green-50 text-green-700 border-green-200"
+                      : "bg-red-50 text-red-600 border-red-200"
+                  )}>
+                    {viewTxn.paymentStatus === "paid" ? "Paid" : "Unpaid"}
+                  </span>
+                </div>
                 {/* Current Status */}
-                <div className="col-span-2 bg-muted/30 rounded-md p-2.5">
+                <div className="bg-muted/30 rounded-md p-2.5">
                   <p className="text-[11px] text-muted-foreground mb-1">Current Status</p>
                   <span className={cn("inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium", statusColors[viewTxn.status])}>
                     {viewTxn.status}
@@ -1103,8 +1421,8 @@ export default function TransactionsPage() {
                 <Button size="sm" variant="outline" className="flex-1 gap-1.5" onClick={() => { setReprintTxn(viewTxn); setViewTxn(null); }}>
                   <Printer className="w-3.5 h-3.5" /> Reprint QR
                 </Button>
-                <Button size="sm" variant="outline" className="flex-1 gap-1.5" onClick={() => window.print()}>
-                  <Printer className="w-3.5 h-3.5" /> Reprint Claim Stub
+                <Button size="sm" variant="outline" className="flex-1 gap-1.5" onClick={() => { setPrintTxn(viewTxn); setPrintPostCreate(false); setViewTxn(null); }}>
+                  <Printer className="w-3.5 h-3.5" /> Print Receipt
                 </Button>
                 <Button size="sm" variant="secondary" className="flex-1" onClick={() => setViewTxn(null)}>
                   <X className="w-3.5 h-3.5 mr-1" /> Close
@@ -1115,7 +1433,7 @@ export default function TransactionsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* ── EDIT MODAL ─────────────────────────────────────────────────────── */}
+      {/* ── EDIT MODAL ────────���────────────────────────────────────────────── */}
       <Dialog open={!!editTxn} onOpenChange={(open) => !open && setEditTxn(null)}>
         <DialogContent className="w-[calc(100vw-1rem)] sm:w-auto max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -1166,6 +1484,34 @@ export default function TransactionsPage() {
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+
+              {/* Payment Status */}
+              <div>
+                <label className="text-xs font-medium text-foreground mb-1.5 block">Payment Status</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {(["unpaid", "paid"] as const).map((ps) => (
+                    <button
+                      key={ps}
+                      onClick={() => setEditPaymentStatus(ps)}
+                      className={cn(
+                        "rounded-lg border-2 py-2.5 px-3 text-xs font-semibold transition-all cursor-pointer",
+                        ps === "unpaid"
+                          ? editPaymentStatus === "unpaid"
+                            ? "border-red-500 bg-red-50 text-red-600"
+                            : "border-border bg-background text-muted-foreground hover:border-red-300"
+                          : editPaymentStatus === "paid"
+                            ? "border-green-500 bg-green-50 text-green-600"
+                            : "border-border bg-background text-muted-foreground hover:border-green-300"
+                      )}
+                    >
+                      {ps === "unpaid" ? "Unpaid" : "Paid"}
+                    </button>
+                  ))}
+                </div>
+                {editPaymentStatus === "paid" && (
+                  <p className="text-[11px] text-green-600 mt-1">Marked as paid. This will be recorded in the transaction log.</p>
+                )}
               </div>
 
               {/* Wash instructions */}
@@ -1257,6 +1603,14 @@ export default function TransactionsPage() {
         open={showWizard}
         onClose={() => setShowWizard(false)}
         onSubmit={handleNewTransaction}
+      />
+
+      {/* ── PRINT RECEIPT MODAL ──────────────────────────────────────────────── */}
+      <PrintReceiptModal
+        open={!!printTxn}
+        onOpenChange={(o) => { if (!o) { setPrintTxn(null); setPrintPostCreate(false); } }}
+        transaction={printTxn}
+        postCreate={printPostCreate}
       />
 
       {/* ── REPRINT / QR MODAL ───────────────────────────────────────────────── */}

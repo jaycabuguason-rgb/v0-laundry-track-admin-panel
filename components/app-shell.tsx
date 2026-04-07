@@ -3,6 +3,8 @@
 import { useState } from "react";
 import Sidebar, { type Page } from "@/components/sidebar";
 import TopNav from "@/components/topnav";
+import { TransactionDetailModal } from "@/components/transaction-detail-modal";
+import { transactions, type Transaction } from "@/lib/data";
 import DashboardPage from "@/components/pages/dashboard";
 import TransactionsPage from "@/components/pages/transactions";
 import ClaimVerificationPage from "@/components/pages/claim-verification";
@@ -23,6 +25,14 @@ interface AppShellProps {
 export default function AppShell({ onSignOut, adminProfile, onProfileUpdate }: AppShellProps) {
   const [activePage, setActivePage] = useState<Page>("dashboard");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [detailTxn, setDetailTxn] = useState<Transaction | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
+
+  const handleTransactionDetail = (ticketId: string) => {
+    const txn = transactions.find((t) => t.ticketId === ticketId) ?? null;
+    setDetailTxn(txn);
+    setDetailOpen(true);
+  };
 
   const renderPage = () => {
     switch (activePage) {
@@ -50,6 +60,7 @@ export default function AppShell({ onSignOut, adminProfile, onProfileUpdate }: A
   };
 
   return (
+    <>
     <div className="flex h-screen overflow-hidden bg-background">
       {/* Mobile overlay backdrop */}
       {mobileMenuOpen && (
@@ -77,11 +88,19 @@ export default function AppShell({ onSignOut, adminProfile, onProfileUpdate }: A
           onSignOut={onSignOut}
           adminProfile={adminProfile}
           onMenuToggle={() => setMobileMenuOpen((v) => !v)}
+          onTransactionDetail={handleTransactionDetail}
         />
         <main className="flex-1 overflow-y-auto p-4 md:p-6">
           {renderPage()}
         </main>
       </div>
     </div>
+
+    <TransactionDetailModal
+      open={detailOpen}
+      onOpenChange={setDetailOpen}
+      transaction={detailTxn}
+    />
+    </>
   );
 }
