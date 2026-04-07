@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { type Page } from "@/components/sidebar";
+import { cn } from "@/lib/utils";
 import {
   transactions,
   loyaltyMembers,
@@ -571,20 +572,27 @@ function ServiceTypesSettings() {
 
               {/* Bottom row: toggles + actions */}
               <div className="flex items-center gap-3 flex-wrap">
-                {/* Toggle 1: Show in Transaction */}
+                {/* Toggle 1: Show in Transaction — turning OFF also forces showPrice OFF */}
                 <div className="flex items-center gap-1.5">
                   <Switch
                     checked={s.active}
-                    onCheckedChange={(v) => updateServices(services.map((x) => x.id === s.id ? { ...x, active: v } : x))}
+                    onCheckedChange={(v) =>
+                      updateServices(services.map((x) =>
+                        x.id === s.id
+                          ? { ...x, active: v, showPrice: v ? (x.showPrice ?? true) : false }
+                          : x
+                      ))
+                    }
                     className="scale-90"
                   />
                   <span className="text-[11px] text-muted-foreground font-medium">Show</span>
                 </div>
-                {/* Toggle 2: Show Price */}
-                <div className="flex items-center gap-1.5">
+                {/* Toggle 2: Show Price — disabled and dimmed when Show is OFF */}
+                <div className={cn("flex items-center gap-1.5 transition-opacity duration-150", !s.active && "opacity-40 pointer-events-none")}>
                   <Switch
-                    checked={s.showPrice ?? true}
+                    checked={(s.showPrice ?? true) && s.active}
                     onCheckedChange={(v) => updateServices(services.map((x) => x.id === s.id ? { ...x, showPrice: v } : x))}
+                    disabled={!s.active}
                     className="scale-90"
                   />
                   <span className="text-[11px] text-muted-foreground font-medium">Price</span>
