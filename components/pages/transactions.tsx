@@ -25,7 +25,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { transactions as initialTxns, loyaltyMembers, statusColors, statusOrder, type Transaction, type LoyaltyMember } from "@/lib/data";
+import { transactions as initialTxns, loyaltyMembers, statusColors, statusOrder, type Transaction, type PaymentStatus, type LoyaltyMember } from "@/lib/data";
 import {
   type ServiceType,
   type AddOn,
@@ -38,6 +38,7 @@ import {
 } from "@/lib/settings-store";
 import { cn } from "@/lib/utils";
 import { Textarea } from "@/components/ui/textarea";
+import { PrintReceiptModal } from "@/components/print-receipt-modal";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // QR Scanner (inline, no package)
@@ -218,6 +219,7 @@ interface WizardForm {
   weight: string;
   addOns: string[];
   washInstructions: string;
+  paymentStatus: PaymentStatus;
 }
 
 // Wash types and add-ons are loaded dynamically from settings (see wizard state below)
@@ -262,6 +264,7 @@ function NewTransactionWizard({
     weight: "",
     addOns: [],
     washInstructions: "",
+    paymentStatus: "unpaid",
   });
 
   // Loyalty search state
@@ -298,6 +301,7 @@ function NewTransactionWizard({
         weight: "",
         addOns: [],
         washInstructions: "",
+        paymentStatus: "unpaid",
       });
       setMemberSearch("");
       setMemberSearchRes([]);
@@ -396,6 +400,7 @@ function NewTransactionWizard({
       weight: effectiveMode === "per-load" ? 0 : parseFloat(form.weight),
       fee,
       status: "Received",
+      paymentStatus: form.paymentStatus,
       addOns: form.addOns,
       washInstructions: form.washInstructions,
     });
@@ -829,7 +834,7 @@ function NewTransactionWizard({
     );
   };
 
-  // ── Step 3: Summary & Receipt ─────────────────────────────────────────────
+  // ── Step 3: Summary & Receipt ───────────────────��─────────────────────────
   const renderStep3 = () => {
     const fee = computeFee();
     const isLoyalty = form.customerType === "loyalty" && form.loyaltyMember;
@@ -866,6 +871,36 @@ function NewTransactionWizard({
           <div className="bg-primary/5 border border-primary/20 rounded-lg px-4 py-3 flex items-center justify-between">
             <span className="text-sm font-medium">Total Fee</span>
             <span className="text-xl font-bold text-primary">₱{fee}</span>
+          </div>
+
+          {/* Payment Status */}
+          <div>
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Payment Status</p>
+            <div className="grid grid-cols-2 gap-2">
+              {(["unpaid", "paid"] as const).map((ps) => (
+                <button
+                  key={ps}
+                  onClick={() => setForm((f) => ({ ...f, paymentStatus: ps }))}
+                  className={cn(
+                    "rounded-lg border-2 py-3 px-4 text-sm font-semibold transition-all cursor-pointer flex flex-col items-center gap-0.5",
+                    ps === "unpaid"
+                      ? form.paymentStatus === "unpaid"
+                        ? "border-red-500 bg-red-50 text-red-600"
+                        : "border-border bg-background text-muted-foreground hover:border-red-300"
+                      : form.paymentStatus === "paid"
+                        ? "border-green-500 bg-green-50 text-green-600"
+                        : "border-border bg-background text-muted-foreground hover:border-green-300"
+                  )}
+                >
+                  {ps === "unpaid" ? "Unpaid" : "Paid"}
+                </button>
+              ))}
+            </div>
+            <p className="text-[11px] text-muted-foreground mt-2 leading-relaxed">
+              {form.paymentStatus === "unpaid"
+                ? "Payment will be recorded as pending. Customer receipt will show balance due."
+                : "Payment confirmed. Receipt will show as fully paid."}
+            </p>
           </div>
         </div>
 
@@ -999,9 +1034,12 @@ export default function TransactionsPage() {
   const [editTxn, setEditTxn]         = useState<Transaction | null>(null);
   const [editInstructions, setEditInstructions] = useState("");
   const [editStatus, setEditStatus]   = useState<Transaction["status"]>("Received");
+  const [editPaymentStatus, setEditPaymentStatus] = useState<PaymentStatus>("unpaid");
   const [voidTxn, setVoidTxn]         = useState<Transaction | null>(null);
   const [voidReason, setVoidReason]   = useState("");
   const [reprintTxn, setReprintTxn]   = useState<Transaction | null>(null);
+  const [printTxn, setPrintTxn]       = useState<Transaction | null>(null);
+  const [printPostCreate, setPrintPostCreate] = useState(false);
 
   // Toast
   const [toast, setToast] = useState<string | null>(null);
@@ -1011,7 +1049,7 @@ export default function TransactionsPage() {
     setTimeout(() => setToast(null), 3200);
   };
 
-  // ── History helpers ──────────────────────────────────────────────────────
+  // ── History helpers ──────────────────────────────────────────────���───────
   const commit = (nextTxns: Transaction[], description: string) => {
     const entry: HistoryEntry = { prev: txns, next: nextTxns, description };
     const newHistory = [...history.slice(0, historyIdx + 1), entry].slice(-10);
@@ -1063,7 +1101,7 @@ export default function TransactionsPage() {
   const saveInstructions = () => {
     if (!editTxn) return;
     const updated = txns.map((t) =>
-      t.id === editTxn.id ? { ...t, status: editStatus, washInstructions: editInstructions } : t
+      t.id === editTxn.id ? { ...t, status: editStatus, paymentStatus: editPaymentStatus, washInstructions: editInstructions } : t
     );
     commit(updated, `Edit ${editTxn.ticketId}`);
     showToast(`Ticket #${editTxn.ticketId} updated successfully`);
@@ -1084,6 +1122,7 @@ export default function TransactionsPage() {
     setEditTxn(txn);
     setEditInstructions(txn.washInstructions || "");
     setEditStatus(txn.status);
+    setEditPaymentStatus(txn.paymentStatus);
   };
 
   const handleNewTransaction = (partial: Omit<Transaction, "id" | "ticketId">) => {
@@ -1092,6 +1131,9 @@ export default function TransactionsPage() {
     const newTxn: Transaction = { id: newId, ticketId: newTicket, ...partial };
     commit([newTxn, ...txns], `New transaction ${newTicket}`);
     showToast(`Ticket #${newTicket} created for ${partial.customerName}`);
+    // Prompt to print receipt
+    setPrintTxn(newTxn);
+    setPrintPostCreate(true);
   };
 
   // ── Derived ──────────────────────────────────────────────────────────────
@@ -1202,6 +1244,7 @@ export default function TransactionsPage() {
                 <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3 whitespace-nowrap hidden sm:table-cell">Weight</th>
                 <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3 whitespace-nowrap hidden md:table-cell">Wash Type</th>
                 <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3 whitespace-nowrap">Fee</th>
+                <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3 whitespace-nowrap hidden sm:table-cell">Payment</th>
                 <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3 whitespace-nowrap">Status</th>
                 <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3 whitespace-nowrap">Actions</th>
               </tr>
@@ -1223,6 +1266,16 @@ export default function TransactionsPage() {
                     <td className={cn("px-4 py-3 text-xs text-muted-foreground hidden sm:table-cell", isVoided && "line-through")}>{txn.weight} kg</td>
                     <td className={cn("px-4 py-3 text-xs text-muted-foreground hidden md:table-cell", isVoided && "line-through")}>{txn.washType}</td>
                     <td className={cn("px-4 py-3 text-xs font-medium text-foreground", isVoided && "line-through")}>₱{txn.fee}</td>
+                    <td className="px-4 py-3 hidden sm:table-cell">
+                      <span className={cn(
+                        "inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap",
+                        txn.paymentStatus === "paid"
+                          ? "bg-green-50 text-green-700 border border-green-200"
+                          : "bg-red-50 text-red-600 border border-red-200"
+                      )}>
+                        {txn.paymentStatus === "paid" ? "Paid" : "Unpaid"}
+                      </span>
+                    </td>
                     <td className="px-4 py-3">
                       <span className={cn(
                         "inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium whitespace-nowrap",
@@ -1248,7 +1301,7 @@ export default function TransactionsPage() {
                         >
                           <Ban className="w-3.5 h-3.5" />
                         </Button>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 hidden sm:flex" title="Reprint" onClick={() => setReprintTxn(txn)}>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 hidden sm:flex" title="Print Receipt" onClick={() => { setPrintTxn(txn); setPrintPostCreate(false); }}>
                           <Printer className="w-3.5 h-3.5" />
                         </Button>
                       </div>
@@ -1258,7 +1311,7 @@ export default function TransactionsPage() {
               })}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="text-center py-10 text-sm text-muted-foreground">
+                  <td colSpan={9} className="text-center py-10 text-sm text-muted-foreground">
                     No transactions found.
                   </td>
                 </tr>
@@ -1294,8 +1347,20 @@ export default function TransactionsPage() {
                     <p className="font-medium text-foreground text-xs mt-0.5">{row.value}</p>
                   </div>
                 ))}
+                {/* Payment Status */}
+                <div className="bg-muted/30 rounded-md p-2.5">
+                  <p className="text-[11px] text-muted-foreground mb-1">Payment Status</p>
+                  <span className={cn(
+                    "inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border",
+                    viewTxn.paymentStatus === "paid"
+                      ? "bg-green-50 text-green-700 border-green-200"
+                      : "bg-red-50 text-red-600 border-red-200"
+                  )}>
+                    {viewTxn.paymentStatus === "paid" ? "Paid" : "Unpaid"}
+                  </span>
+                </div>
                 {/* Current Status */}
-                <div className="col-span-2 bg-muted/30 rounded-md p-2.5">
+                <div className="bg-muted/30 rounded-md p-2.5">
                   <p className="text-[11px] text-muted-foreground mb-1">Current Status</p>
                   <span className={cn("inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium", statusColors[viewTxn.status])}>
                     {viewTxn.status}
@@ -1356,8 +1421,8 @@ export default function TransactionsPage() {
                 <Button size="sm" variant="outline" className="flex-1 gap-1.5" onClick={() => { setReprintTxn(viewTxn); setViewTxn(null); }}>
                   <Printer className="w-3.5 h-3.5" /> Reprint QR
                 </Button>
-                <Button size="sm" variant="outline" className="flex-1 gap-1.5" onClick={() => window.print()}>
-                  <Printer className="w-3.5 h-3.5" /> Reprint Claim Stub
+                <Button size="sm" variant="outline" className="flex-1 gap-1.5" onClick={() => { setPrintTxn(viewTxn); setPrintPostCreate(false); setViewTxn(null); }}>
+                  <Printer className="w-3.5 h-3.5" /> Print Receipt
                 </Button>
                 <Button size="sm" variant="secondary" className="flex-1" onClick={() => setViewTxn(null)}>
                   <X className="w-3.5 h-3.5 mr-1" /> Close
@@ -1368,7 +1433,7 @@ export default function TransactionsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* ── EDIT MODAL ─────────────────────────────────────────────────────── */}
+      {/* ── EDIT MODAL ────────���────────────────────────────────────────────── */}
       <Dialog open={!!editTxn} onOpenChange={(open) => !open && setEditTxn(null)}>
         <DialogContent className="w-[calc(100vw-1rem)] sm:w-auto max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -1419,6 +1484,34 @@ export default function TransactionsPage() {
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+
+              {/* Payment Status */}
+              <div>
+                <label className="text-xs font-medium text-foreground mb-1.5 block">Payment Status</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {(["unpaid", "paid"] as const).map((ps) => (
+                    <button
+                      key={ps}
+                      onClick={() => setEditPaymentStatus(ps)}
+                      className={cn(
+                        "rounded-lg border-2 py-2.5 px-3 text-xs font-semibold transition-all cursor-pointer",
+                        ps === "unpaid"
+                          ? editPaymentStatus === "unpaid"
+                            ? "border-red-500 bg-red-50 text-red-600"
+                            : "border-border bg-background text-muted-foreground hover:border-red-300"
+                          : editPaymentStatus === "paid"
+                            ? "border-green-500 bg-green-50 text-green-600"
+                            : "border-border bg-background text-muted-foreground hover:border-green-300"
+                      )}
+                    >
+                      {ps === "unpaid" ? "Unpaid" : "Paid"}
+                    </button>
+                  ))}
+                </div>
+                {editPaymentStatus === "paid" && (
+                  <p className="text-[11px] text-green-600 mt-1">Marked as paid. This will be recorded in the transaction log.</p>
+                )}
               </div>
 
               {/* Wash instructions */}
@@ -1510,6 +1603,14 @@ export default function TransactionsPage() {
         open={showWizard}
         onClose={() => setShowWizard(false)}
         onSubmit={handleNewTransaction}
+      />
+
+      {/* ── PRINT RECEIPT MODAL ──────────────────────────────────────────────── */}
+      <PrintReceiptModal
+        open={!!printTxn}
+        onOpenChange={(o) => { if (!o) { setPrintTxn(null); setPrintPostCreate(false); } }}
+        transaction={printTxn}
+        postCreate={printPostCreate}
       />
 
       {/* ── REPRINT / QR MODAL ───────────────────────────────────────────────── */}

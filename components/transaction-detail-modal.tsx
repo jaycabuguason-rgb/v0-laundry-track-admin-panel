@@ -131,6 +131,17 @@ export function TransactionDetailModal({ open, onOpenChange, transaction }: Tran
               <span className="text-sm text-muted-foreground">Total</span>
               <span className="text-xl font-bold text-primary">₱{transaction.fee.toLocaleString()}</span>
             </div>
+            <div className="mt-3 pt-3 border-t border-primary/10 flex items-center justify-between">
+              <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Payment Status</span>
+              <span className={[
+                "inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold border",
+                transaction.paymentStatus === "paid"
+                  ? "bg-green-50 text-green-700 border-green-200"
+                  : "bg-red-50 text-red-600 border-red-200",
+              ].join(" ")}>
+                {transaction.paymentStatus === "paid" ? "Paid" : "Unpaid"}
+              </span>
+            </div>
           </div>
         </div>
 
