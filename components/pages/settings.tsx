@@ -557,11 +557,17 @@ function ServiceTypesSettings() {
         </CardHeader>
         <CardContent className="space-y-2">
           {services.map((s) => (
-            <div key={s.id} className="bg-muted/30 rounded-md px-3 py-2.5 space-y-2">
+            <div
+              key={s.id}
+              className={cn(
+                "rounded-md px-3 py-2.5 space-y-2 transition-opacity duration-150",
+                s.active ? "bg-muted/30" : "bg-muted/10 opacity-60"
+              )}
+            >
               {/* Top row: name + badges */}
               <div className="flex items-start gap-2 flex-wrap">
                 <p className="text-sm font-semibold text-foreground">{s.name}</p>
-                {(s.showPrice ?? true) && (
+                {s.active && (s.showPrice ?? true) && (
                   <span className="text-xs font-semibold text-primary bg-primary/10 rounded-full px-2 py-0.5">₱{s.price}</span>
                 )}
                 <span className="text-[10px] font-medium text-muted-foreground bg-muted rounded-full px-2 py-0.5 border border-border">
@@ -587,8 +593,14 @@ function ServiceTypesSettings() {
                   />
                   <span className="text-[11px] text-muted-foreground font-medium">Show</span>
                 </div>
-                {/* Toggle 2: Show Price — disabled and dimmed when Show is OFF */}
-                <div className={cn("flex items-center gap-1.5 transition-opacity duration-150", !s.active && "opacity-40 pointer-events-none")}>
+                {/* Toggle 2: Show Price — disabled, dimmed, and has tooltip when Show is OFF */}
+                <div
+                  className={cn(
+                    "flex items-center gap-1.5 transition-opacity duration-150",
+                    !s.active && "opacity-40 pointer-events-none cursor-not-allowed"
+                  )}
+                  title={!s.active ? "Enable Show first to configure Price" : undefined}
+                >
                   <Switch
                     checked={(s.showPrice ?? true) && s.active}
                     onCheckedChange={(v) => updateServices(services.map((x) => x.id === s.id ? { ...x, showPrice: v } : x))}
