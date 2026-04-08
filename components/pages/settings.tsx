@@ -56,9 +56,8 @@ function PricingSettings() {
   const [newTierPrice, setNewTierPrice] = useState("");
 
   // Loyalty
-  const [milestone, setMilestone]           = useState("7");
-  const [customMilestone, setCustomMilestone] = useState("10");
-  const [customReward, setCustomReward]     = useState("");
+  const [washesPerReward, setWashesPerReward] = useState("10");
+  const [rewardDescription, setRewardDescription] = useState("Free wash");
 
   // Add-ons — initialised from shared store
   const [addOns, setAddOns] = useState<AddOn[]>(() => loadAddOns());
@@ -273,46 +272,31 @@ function PricingSettings() {
       <Card className="border border-border shadow-none">
         <CardHeader className="pb-3">
           <CardTitle className="text-sm">Loyalty Rewards</CardTitle>
-          <CardDescription className="text-xs">Configure visit milestones and what customers earn.</CardDescription>
+          <CardDescription className="text-xs">Configure how customers earn rewards based on their washes.</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          {/* Reward 1 — free wash */}
-          <div className="space-y-1.5">
-            <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Reward 1 — Stamp Card</Label>
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground shrink-0">Every</span>
-              <Input
-                type="number"
-                min="1"
-                value={milestone}
-                onChange={(e) => setMilestone(e.target.value)}
-                className="w-16 h-9 text-sm text-center"
-              />
-              <span className="text-sm text-muted-foreground shrink-0">visits = free wash</span>
-            </div>
-          </div>
-
-          {/* Reward 2 — custom */}
-          <div className="space-y-2 pt-1 border-t border-border">
-            <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Reward 2 — Custom Milestone</Label>
+        <CardContent className="space-y-3">
+          <div className="space-y-2">
+            <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Loyalty Reward</Label>
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-sm text-muted-foreground shrink-0">Every</span>
               <Input
                 type="number"
                 min="1"
-                value={customMilestone}
-                onChange={(e) => setCustomMilestone(e.target.value)}
+                value={washesPerReward}
+                onChange={(e) => setWashesPerReward(e.target.value)}
                 className="w-16 h-9 text-sm text-center"
               />
-              <span className="text-sm text-muted-foreground shrink-0">visits =</span>
+              <span className="text-sm text-muted-foreground shrink-0">washes =</span>
               <Input
-                placeholder="e.g. free load, 50% discount, free fabcon"
-                value={customReward}
-                onChange={(e) => setCustomReward(e.target.value)}
+                placeholder="e.g. Free wash, 50% discount, Free fabcon"
+                value={rewardDescription}
+                onChange={(e) => setRewardDescription(e.target.value)}
                 className="flex-1 min-w-48 h-9 text-sm"
               />
             </div>
-            <p className="text-[11px] text-muted-foreground">Leave blank to disable the custom milestone reward.</p>
+            <p className="text-[11px] text-muted-foreground">
+              Example: Every 10 washes = Free wash
+            </p>
           </div>
         </CardContent>
       </Card>

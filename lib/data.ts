@@ -36,6 +36,8 @@ export interface AuditLog {
   action: "Scanned" | "Claimed" | "Denied" | "Override";
   staff: string;
   notes: string;
+  paymentStatus?: PaymentStatus;
+  customerName?: string;
 }
 
 export interface Notification {

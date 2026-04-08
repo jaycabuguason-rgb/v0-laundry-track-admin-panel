@@ -27,18 +27,23 @@ export default function AppShell({ onSignOut, adminProfile, onProfileUpdate }: A
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [detailTxn, setDetailTxn] = useState<Transaction | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
+  const [txns, setTxns] = useState<Transaction[]>(transactions);
 
   const handleTransactionDetail = (ticketId: string) => {
-    const txn = transactions.find((t) => t.ticketId === ticketId) ?? null;
+    const txn = txns.find((t) => t.ticketId === ticketId) ?? null;
     setDetailTxn(txn);
     setDetailOpen(true);
   };
 
+  const handleUpdateTransaction = (ticketId: string, updates: Partial<Transaction>) => {
+    setTxns((prev) => prev.map((t) => t.ticketId === ticketId ? { ...t, ...updates } : t));
+  };
+
   const renderPage = () => {
     switch (activePage) {
-      case "dashboard": return <DashboardPage />;
-      case "transactions": return <TransactionsPage />;
-      case "claim-verification": return <ClaimVerificationPage />;
+      case "dashboard": return <DashboardPage transactions={txns} />;
+      case "transactions": return <TransactionsPage transactions={txns} />;
+      case "claim-verification": return <ClaimVerificationPage transactions={txns} onUpdateTransaction={handleUpdateTransaction} />;
       case "reports": return <ReportsPage />;
       case "settings-pricing":
       case "settings-service-types":
@@ -50,7 +55,7 @@ export default function AppShell({ onSignOut, adminProfile, onProfileUpdate }: A
       case "loyalty": return <LoyaltyPage />;
       case "profile": return <ProfilePage adminProfile={adminProfile} />;
       case "change-password": return <ChangePasswordPage adminProfile={adminProfile} onProfileUpdate={onProfileUpdate} />;
-      default: return <DashboardPage />;
+      default: return <DashboardPage transactions={txns} />;
     }
   };
 
