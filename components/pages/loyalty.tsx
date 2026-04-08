@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { Search, ChevronLeft, Star } from "lucide-react";
+import { Search, ChevronLeft, Star, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { loyaltyMembers, type LoyaltyMember } from "@/lib/data";
 
 function StampDots({ count, max = 21 }: { count: number; max?: number }) {
@@ -23,6 +24,11 @@ function StampDots({ count, max = 21 }: { count: number; max?: number }) {
 export default function LoyaltyPage() {
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<LoyaltyMember | null>(null);
+  const [rewardCycleModal, setRewardCycleModal] = useState<{ date: string; reward: string } | null>(null);
+
+  // Loyalty config - in real app this would come from settings
+  const washesPerReward = 10;
+  const rewardName = "Free wash";
 
   const filtered = loyaltyMembers.filter(
     (m) =>
@@ -71,14 +77,22 @@ export default function LoyaltyPage() {
           <div className="md:col-span-2 space-y-4">
             <Card className="border border-border shadow-none">
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm">Stamp History</CardTitle>
+                <CardTitle className="text-sm">Current Cycle Progress</CardTitle>
               </CardHeader>
               <CardContent className="p-0">
                 <div className="px-4 py-3">
-                  <StampDots count={selected.stampCount} />
-                  <p className="text-xs text-muted-foreground mt-2">
-                    {7 - (selected.stampCount % 7)} stamps until next free wash
-                  </p>
+                  {(() => {
+                    const currentCycleStamps = selected.stampCount % washesPerReward;
+                    const stampsUntilReward = washesPerReward - currentCycleStamps;
+                    return (
+                      <>
+                        <StampDots count={currentCycleStamps} max={washesPerReward} />
+                        <p className="text-xs text-muted-foreground mt-2">
+                          {stampsUntilReward} {stampsUntilReward === 1 ? "wash" : "washes"} until next {rewardName}
+                        </p>
+                      </>
+                    );
+                  })()}
                 </div>
                 <table className="w-full text-sm">
                   <thead>
@@ -89,17 +103,23 @@ export default function LoyaltyPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {selected.stampHistory.length === 0 ? (
-                      <tr><td colSpan={3} className="text-center py-6 text-xs text-muted-foreground">No stamp history</td></tr>
-                    ) : (
-                      selected.stampHistory.map((s, i) => (
+                    {(() => {
+                      // Only show stamps from current cycle (after last reward)
+                      const currentCycleStamps = selected.stampCount % washesPerReward;
+                      const currentCycleHistory = selected.stampHistory.slice(-currentCycleStamps);
+                      
+                      if (currentCycleHistory.length === 0) {
+                        return <tr><td colSpan={3} className="text-center py-6 text-xs text-muted-foreground">No stamps in current cycle</td></tr>;
+                      }
+                      
+                      return currentCycleHistory.map((s, i) => (
                         <tr key={i} className="border-b border-border last:border-0">
                           <td className="px-4 py-2.5 text-xs text-muted-foreground">{s.date}</td>
                           <td className="px-4 py-2.5 text-xs font-mono text-primary">{s.ticket}</td>
                           <td className="px-4 py-2.5 text-xs font-medium">+{s.stamps}</td>
                         </tr>
-                      ))
-                    )}
+                      ));
+                    })()}
                   </tbody>
                 </table>
               </CardContent>
@@ -123,7 +143,11 @@ export default function LoyaltyPage() {
                       <tr><td colSpan={2} className="text-center py-6 text-xs text-muted-foreground">No rewards redeemed yet</td></tr>
                     ) : (
                       selected.rewardHistory.map((r, i) => (
-                        <tr key={i} className="border-b border-border last:border-0">
+                        <tr 
+                          key={i} 
+                          className="border-b border-border last:border-0 hover:bg-muted/20 cursor-pointer transition-colors"
+                          onClick={() => setRewardCycleModal(r)}
+                        >
                           <td className="px-4 py-2.5 text-xs text-muted-foreground">{r.date}</td>
                           <td className="px-4 py-2.5 text-xs font-medium text-green-700">{r.reward}</td>
                         </tr>
@@ -135,6 +159,69 @@ export default function LoyaltyPage() {
             </Card>
           </div>
         </div>
+
+        {/* Reward Cycle Modal */}
+        <Dialog open={!!rewardCycleModal} onOpenChange={(open) => !open && setRewardCycleModal(null)}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="text-base">
+                Reward Cycle — {rewardCycleModal?.date}
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 pt-2">
+              {/* Cycle visits */}
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground mb-2">Visits in this cycle:</p>
+                <table className="w-full text-sm border border-border rounded-lg overflow-hidden">
+                  <thead>
+                    <tr className="bg-muted/40 border-b border-border">
+                      <th className="text-left text-xs font-medium text-muted-foreground px-3 py-2">Date</th>
+                      <th className="text-left text-xs font-medium text-muted-foreground px-3 py-2">Ticket</th>
+                      <th className="text-left text-xs font-medium text-muted-foreground px-3 py-2">Stamps</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(() => {
+                      // Mock data - in real app, this would be stored per reward cycle
+                      // For demo, show placeholder visits that would have led to this reward
+                      const mockCycleVisits = Array.from({ length: washesPerReward }, (_, i) => ({
+                        date: `2026-0${(i % 3) + 1}-${10 + i}`,
+                        ticket: `TKT-00${70 + i}`,
+                        stamps: 1,
+                      }));
+                      
+                      return mockCycleVisits.map((v, i) => (
+                        <tr key={i} className="border-b border-border last:border-0">
+                          <td className="px-3 py-2 text-xs text-muted-foreground">{v.date}</td>
+                          <td className="px-3 py-2 text-xs font-mono text-primary">{v.ticket}</td>
+                          <td className="px-3 py-2 text-xs font-medium">+{v.stamps}</td>
+                        </tr>
+                      ));
+                    })()}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Summary */}
+              <div className="bg-green-50 border border-green-200 rounded-lg p-3 space-y-1">
+                <p className="text-xs text-green-700">
+                  <span className="font-semibold">Total stamps in cycle:</span> {washesPerReward}
+                </p>
+                <p className="text-xs text-green-700">
+                  <span className="font-semibold">Reward received:</span> {rewardCycleModal?.reward}
+                </p>
+              </div>
+
+              <Button 
+                variant="outline" 
+                className="w-full" 
+                onClick={() => setRewardCycleModal(null)}
+              >
+                Close
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     );
   }
@@ -156,19 +243,13 @@ export default function LoyaltyPage() {
       </div>
 
       {/* Summary */}
-      <div className="grid grid-cols-3 gap-4 max-w-lg">
-        {[
-          { label: "Total Members", value: loyaltyMembers.length },
-          { label: "Avg. Stamps", value: Math.round(loyaltyMembers.reduce((s, m) => s + m.stampCount, 0) / loyaltyMembers.length) },
-          { label: "Total Rewards", value: loyaltyMembers.reduce((s, m) => s + m.rewardsRedeemed, 0) },
-        ].map((c) => (
-          <Card key={c.label} className="border border-border shadow-none">
-            <CardContent className="p-4 text-center">
-              <p className="text-2xl font-bold text-foreground">{c.value}</p>
-              <p className="text-xs text-muted-foreground mt-0.5">{c.label}</p>
-            </CardContent>
-          </Card>
-        ))}
+      <div className="max-w-xs">
+        <Card className="border border-border shadow-none">
+          <CardContent className="p-4 text-center">
+            <p className="text-2xl font-bold text-foreground">{loyaltyMembers.length}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Total Members</p>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Members Table */}
