@@ -9,9 +9,10 @@ import { Label } from "@/components/ui/label";
 interface LoginPageProps {
   onLogin: () => void;
   onForgotPassword: () => void;
+  onCreateAccount: () => void;
 }
 
-export default function LoginPage({ onLogin, onForgotPassword }: LoginPageProps) {
+export default function LoginPage({ onLogin, onForgotPassword, onCreateAccount }: LoginPageProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -136,6 +137,23 @@ export default function LoginPage({ onLogin, onForgotPassword }: LoginPageProps)
             >
               Forgot Password?
             </button>
+
+            {/* Divider */}
+            <div className="flex items-center gap-3 my-1">
+              <div className="flex-1 h-px bg-border" />
+              <span className="text-xs text-muted-foreground">or</span>
+              <div className="flex-1 h-px bg-border" />
+            </div>
+
+            {/* Create Account */}
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full border-primary text-primary hover:bg-primary/5 cursor-pointer"
+              onClick={onCreateAccount}
+            >
+              Create Account
+            </Button>
           </div>
         </div>
 
