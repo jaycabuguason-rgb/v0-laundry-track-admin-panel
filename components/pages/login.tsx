@@ -9,9 +9,10 @@ import { Label } from "@/components/ui/label";
 interface LoginPageProps {
   onLogin: () => void;
   onForgotPassword: () => void;
+  onCreateAccount: () => void;
 }
 
-export default function LoginPage({ onLogin, onForgotPassword }: LoginPageProps) {
+export default function LoginPage({ onLogin, onForgotPassword, onCreateAccount }: LoginPageProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -32,13 +33,13 @@ export default function LoginPage({ onLogin, onForgotPassword }: LoginPageProps)
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[oklch(0.93_0.04_240)] px-4">
+    <div className="min-h-screen flex items-center justify-center bg-[#0c249c] px-4">
       {/* Subtle pattern overlay */}
       <div
-        className="absolute inset-0 opacity-[0.03] pointer-events-none"
+        className="absolute inset-0 opacity-[0.06] pointer-events-none"
         style={{
           backgroundImage:
-            "radial-gradient(circle, oklch(0.5 0.2 240) 1px, transparent 1px)",
+            "radial-gradient(circle, #ffffff 1px, transparent 1px)",
           backgroundSize: "32px 32px",
         }}
       />
@@ -136,10 +137,27 @@ export default function LoginPage({ onLogin, onForgotPassword }: LoginPageProps)
             >
               Forgot Password?
             </button>
+
+            {/* Divider */}
+            <div className="flex items-center gap-3 my-1">
+              <div className="flex-1 h-px bg-border" />
+              <span className="text-xs text-muted-foreground">or</span>
+              <div className="flex-1 h-px bg-border" />
+            </div>
+
+            {/* Create Account */}
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full border-primary text-primary hover:bg-primary/5 cursor-pointer"
+              onClick={onCreateAccount}
+            >
+              Create Account
+            </Button>
           </div>
         </div>
 
-        <p className="text-center text-[11px] text-muted-foreground mt-5">
+        <p className="text-center text-[11px] text-white/50 mt-5">
           &copy; {new Date().getFullYear()} LaundryTrack. All rights reserved.
         </p>
       </div>

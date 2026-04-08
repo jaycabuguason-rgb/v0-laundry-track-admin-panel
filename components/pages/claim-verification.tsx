@@ -1,11 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { QrCode, Search, CheckCircle, XCircle, ShieldAlert } from "lucide-react";
+import { Search, CheckCircle, XCircle, ShieldAlert } from "lucide-react";
+import QRScanner from "@/components/qr-scanner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { auditLogs as initialLogs, transactions, statusColors, type AuditLog } from "@/lib/data";
 import { cn } from "@/lib/utils";
 
@@ -84,24 +84,31 @@ export default function ClaimVerificationPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <div className="space-y-4 md:space-y-6">
+      {/* QR + Manual — stack on mobile, side-by-side on lg */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
         {/* QR Scanner */}
         <Card className="border border-border shadow-none">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-semibold">QR Code Scanner</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="aspect-video bg-muted/50 border-2 border-dashed border-border rounded-xl flex flex-col items-center justify-center gap-3">
-              <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
-                <QrCode className="w-8 h-8 text-primary" />
-              </div>
-              <p className="text-sm text-muted-foreground">Camera preview area</p>
-              <p className="text-xs text-muted-foreground/70">Point QR code at camera to scan</p>
-              <Button size="sm" variant="outline" className="mt-1">
-                Start Camera
-              </Button>
-            </div>
+          <CardContent>
+            <QRScanner
+              onScan={(ticketId) => {
+                setQuery(ticketId);
+                const found = transactions.find(
+                  (t) => t.ticketId.toLowerCase() === ticketId.toLowerCase()
+                );
+                if (found) {
+                  setResult(found);
+                  setNotFound(false);
+                  addLog(found.ticketId, "Scanned", "QR scan");
+                } else {
+                  setResult(null);
+                  setNotFound(true);
+                }
+              }}
+            />
           </CardContent>
         </Card>
 
@@ -119,10 +126,10 @@ export default function ClaimVerificationPage() {
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-                  className="pl-9 h-9 text-sm"
+                  className="pl-9 h-10 md:h-9 text-sm"
                 />
               </div>
-              <Button size="sm" onClick={handleSearch}>Search</Button>
+              <Button size="sm" onClick={handleSearch} className="min-h-[44px] md:min-h-0 px-4">Search</Button>
             </div>
 
             {notFound && (
@@ -132,14 +139,14 @@ export default function ClaimVerificationPage() {
             )}
 
             {result && (
-              <div className="rounded-lg border border-border p-4 space-y-3">
+              <div className="rounded-lg border border-border p-3 md:p-4 space-y-3">
                 <div className="grid grid-cols-2 gap-2 text-sm">
                   {[
-                    { label: "Customer",            value: result.customerName,      span: false },
-                    { label: "Ticket ID",           value: result.ticketId,          span: false },
-                    { label: "Arrival Date & Time", value: result.arrivalDateTime,   span: true  },
-                    { label: "Wash Type",           value: result.washType,          span: false },
-                    { label: "Drop-off Date",       value: result.dropOffDate,       span: false },
+                    { label: "Customer",            value: result.customerName,    span: false },
+                    { label: "Ticket ID",           value: result.ticketId,        span: false },
+                    { label: "Arrival Date & Time", value: result.arrivalDateTime, span: true  },
+                    { label: "Wash Type",           value: result.washType,        span: false },
+                    { label: "Drop-off Date",       value: result.dropOffDate,     span: false },
                   ].map((r) => (
                     <div key={r.label} className={`bg-muted/30 rounded p-2.5${r.span ? " col-span-2" : ""}`}>
                       <p className="text-[11px] text-muted-foreground">{r.label}</p>
@@ -155,10 +162,10 @@ export default function ClaimVerificationPage() {
                 </div>
 
                 {!overrideMode ? (
-                  <div className="flex gap-2 flex-wrap pt-1">
+                  <div className="flex flex-wrap gap-2 pt-1">
                     <Button
                       size="sm"
-                      className="bg-green-600 hover:bg-green-700 text-white flex items-center gap-1.5"
+                      className="bg-green-600 hover:bg-green-700 text-white flex items-center gap-1.5 flex-1 sm:flex-none min-h-[44px] sm:min-h-0 justify-center"
                       onClick={handleClaim}
                     >
                       <CheckCircle className="w-3.5 h-3.5" /> Claim
@@ -166,7 +173,7 @@ export default function ClaimVerificationPage() {
                     <Button
                       size="sm"
                       variant="destructive"
-                      className="flex items-center gap-1.5"
+                      className="flex items-center gap-1.5 flex-1 sm:flex-none min-h-[44px] sm:min-h-0 justify-center"
                       onClick={handleDeny}
                     >
                       <XCircle className="w-3.5 h-3.5" /> Deny
@@ -174,7 +181,7 @@ export default function ClaimVerificationPage() {
                     <Button
                       size="sm"
                       variant="outline"
-                      className="flex items-center gap-1.5 text-orange-600 border-orange-200 hover:bg-orange-50"
+                      className="flex items-center gap-1.5 text-orange-600 border-orange-200 hover:bg-orange-50 w-full sm:w-auto min-h-[44px] sm:min-h-0 justify-center"
                       onClick={() => setOverrideMode(true)}
                     >
                       <ShieldAlert className="w-3.5 h-3.5" /> Override Release
@@ -187,19 +194,19 @@ export default function ClaimVerificationPage() {
                       placeholder="Enter admin password..."
                       value={overridePass}
                       onChange={(e) => setOverridePass(e.target.value)}
-                      className="h-8 text-sm"
+                      className="h-9 text-sm"
                     />
                     <Input
                       placeholder="Reason for override..."
                       value={overrideReason}
                       onChange={(e) => setOverrideReason(e.target.value)}
-                      className="h-8 text-sm"
+                      className="h-9 text-sm"
                     />
                     <div className="flex gap-2">
-                      <Button size="sm" className="bg-orange-600 hover:bg-orange-700 text-white" onClick={handleOverride}>
+                      <Button size="sm" className="bg-orange-600 hover:bg-orange-700 text-white flex-1 min-h-[44px] sm:min-h-0 justify-center" onClick={handleOverride}>
                         Confirm Override
                       </Button>
-                      <Button size="sm" variant="outline" onClick={() => setOverrideMode(false)}>Cancel</Button>
+                      <Button size="sm" variant="outline" className="flex-1 min-h-[44px] sm:min-h-0 justify-center" onClick={() => setOverrideMode(false)}>Cancel</Button>
                     </div>
                   </div>
                 )}
@@ -216,11 +223,11 @@ export default function ClaimVerificationPage() {
         </CardHeader>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm min-w-[480px]">
               <thead>
                 <tr className="border-y border-border bg-muted/40">
                   {["Date / Time", "Ticket ID", "Action", "Staff", "Notes"].map((h) => (
-                    <th key={h} className="text-left text-xs font-medium text-muted-foreground px-4 py-2.5">{h}</th>
+                    <th key={h} className="text-left text-xs font-medium text-muted-foreground px-4 py-2.5 whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
               </thead>

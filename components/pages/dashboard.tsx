@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import {
   ShoppingBag,
   DollarSign,
@@ -7,12 +8,11 @@ import {
   Loader2,
   Users,
   Eye,
-  Edit,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { transactions, peakHoursData, statusColors, loyaltyMembers } from "@/lib/data";
+import { transactions, peakHoursData, statusColors, loyaltyMembers, type Transaction } from "@/lib/data";
+import { TransactionDetailModal } from "@/components/transaction-detail-modal";
 import {
   BarChart,
   Bar,
@@ -66,23 +66,32 @@ const summaryCards = [
 ];
 
 export default function DashboardPage() {
+  const [selectedTxn, setSelectedTxn] = useState<Transaction | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
+
+  const openDetail = (txn: Transaction) => {
+    setSelectedTxn(txn);
+    setDetailOpen(true);
+  };
+
   return (
-    <div className="space-y-6">
-      {/* Summary Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+    <>
+    <div className="space-y-4 md:space-y-6">
+      {/* Summary Cards — 1 col mobile, 2 col sm, 4 col lg */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
         {summaryCards.map((card) => {
           const Icon = card.icon;
           return (
             <Card key={card.label} className="border border-border shadow-none">
-              <CardContent className="p-5">
+              <CardContent className="p-4 md:p-5">
                 <div className="flex items-start justify-between">
-                  <div>
-                    <p className="text-xs text-muted-foreground font-medium">{card.label}</p>
-                    <p className="text-2xl font-bold text-foreground mt-1">{card.value}</p>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs text-muted-foreground font-medium leading-tight">{card.label}</p>
+                    <p className="text-xl md:text-2xl font-bold text-foreground mt-1">{card.value}</p>
                     <p className="text-xs text-muted-foreground mt-1">{card.change}</p>
                   </div>
-                  <div className={`w-10 h-10 rounded-lg ${card.bg} flex items-center justify-center shrink-0`}>
-                    <Icon className={`w-5 h-5 ${card.color}`} />
+                  <div className={`w-9 h-9 md:w-10 md:h-10 rounded-lg ${card.bg} flex items-center justify-center shrink-0 ml-3`}>
+                    <Icon className={`w-4 h-4 md:w-5 md:h-5 ${card.color}`} />
                   </div>
                 </div>
               </CardContent>
@@ -95,26 +104,33 @@ export default function DashboardPage() {
         {/* Recent Transactions */}
         <div className="lg:col-span-2">
           <Card className="border border-border shadow-none">
-            <CardHeader className="pb-3 px-5 pt-5">
+            <CardHeader className="pb-3 px-4 md:px-5 pt-4 md:pt-5">
               <CardTitle className="text-sm font-semibold text-foreground">Recent Transactions</CardTitle>
             </CardHeader>
             <CardContent className="px-0 pb-0">
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+                <table className="w-full text-sm min-w-[400px]">
                   <thead>
                     <tr className="border-y border-border bg-muted/40">
-                      <th className="text-left text-xs font-medium text-muted-foreground px-5 py-2.5">Ticket ID</th>
+                      <th className="text-left text-xs font-medium text-muted-foreground px-4 md:px-5 py-2.5">Ticket ID</th>
                       <th className="text-left text-xs font-medium text-muted-foreground px-3 py-2.5">Customer</th>
                       <th className="text-left text-xs font-medium text-muted-foreground px-3 py-2.5 hidden md:table-cell">Drop-off</th>
                       <th className="text-left text-xs font-medium text-muted-foreground px-3 py-2.5 hidden md:table-cell">Type</th>
                       <th className="text-left text-xs font-medium text-muted-foreground px-3 py-2.5">Status</th>
-                      <th className="text-left text-xs font-medium text-muted-foreground px-3 py-2.5 pr-5">Actions</th>
+                      <th className="text-left text-xs font-medium text-muted-foreground px-3 py-2.5 pr-4 md:pr-5">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {transactions.slice(0, 6).map((txn) => (
                       <tr key={txn.id} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
-                        <td className="px-5 py-3 text-xs font-mono font-medium text-primary">{txn.ticketId}</td>
+                        <td className="px-4 md:px-5 py-3">
+                          <button
+                            onClick={() => openDetail(txn)}
+                            className="text-xs font-mono font-medium text-primary hover:underline cursor-pointer"
+                          >
+                            {txn.ticketId}
+                          </button>
+                        </td>
                         <td className="px-3 py-3 text-xs font-medium text-foreground">{txn.customerName}</td>
                         <td className="px-3 py-3 text-xs text-muted-foreground hidden md:table-cell">{txn.dropOffDate}</td>
                         <td className="px-3 py-3 text-xs text-muted-foreground hidden md:table-cell">{txn.washType}</td>
@@ -123,15 +139,15 @@ export default function DashboardPage() {
                             {txn.status}
                           </span>
                         </td>
-                        <td className="px-3 py-3 pr-5">
-                          <div className="flex items-center gap-1">
-                            <Button variant="ghost" size="icon" className="h-7 w-7">
-                              <Eye className="w-3.5 h-3.5" />
-                            </Button>
-                            <Button variant="ghost" size="icon" className="h-7 w-7">
-                              <Edit className="w-3.5 h-3.5" />
-                            </Button>
-                          </div>
+                        <td className="px-3 py-3 pr-4 md:pr-5">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0 md:h-7 md:w-7"
+                            onClick={() => openDetail(txn)}
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                          </Button>
                         </td>
                       </tr>
                     ))}
@@ -146,10 +162,10 @@ export default function DashboardPage() {
         <div className="space-y-4">
           {/* Peak Hours Chart */}
           <Card className="border border-border shadow-none">
-            <CardHeader className="pb-2 px-5 pt-5">
+            <CardHeader className="pb-2 px-4 md:px-5 pt-4 md:pt-5">
               <CardTitle className="text-sm font-semibold text-foreground">Peak Hours Today</CardTitle>
             </CardHeader>
-            <CardContent className="px-3 pb-4">
+            <CardContent className="px-2 md:px-3 pb-4">
               <ResponsiveContainer width="100%" height={160}>
                 <BarChart data={peakHoursData} barSize={10}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
@@ -167,7 +183,7 @@ export default function DashboardPage() {
 
           {/* Loyalty Members Card */}
           <Card className="border border-border shadow-none">
-            <CardContent className="p-5">
+            <CardContent className="p-4 md:p-5">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-lg bg-yellow-50 flex items-center justify-center shrink-0">
                   <Users className="w-5 h-5 text-yellow-600" />
@@ -183,5 +199,12 @@ export default function DashboardPage() {
         </div>
       </div>
     </div>
+
+    <TransactionDetailModal
+      open={detailOpen}
+      onOpenChange={setDetailOpen}
+      transaction={selectedTxn}
+    />
+    </>
   );
 }

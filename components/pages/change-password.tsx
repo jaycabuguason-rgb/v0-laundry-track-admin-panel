@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Eye, EyeOff, Save, CheckCircle2, Circle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -77,14 +77,28 @@ export default function ChangePasswordPage({ adminProfile, onProfileUpdate }: Ch
   // --- Update Login Credentials state ---
   const [credCurrentEmail, setCredCurrentEmail] = useState(adminProfile.email);
   const [newEmail, setNewEmail]                 = useState("");
+  const [newUsername, setNewUsername]           = useState("");
+  const [credCurrentPassword, setCredCurrentPassword] = useState("");
   const [credSuccess, setCredSuccess]           = useState(false);
 
+  // Keep the "Current Email" field in sync whenever the parent profile updates
+  useEffect(() => {
+    setCredCurrentEmail(adminProfile.email);
+  }, [adminProfile.email]);
+
+  const canSaveCred = credCurrentPassword.trim().length > 0;
+
   const handleCredSave = () => {
+    if (!canSaveCred) return;
     const updates: Partial<AdminProfile> = {};
     if (newEmail.trim()) updates.email = newEmail.trim();
-    onProfileUpdate(updates);
-    setCredCurrentEmail(newEmail.trim() || adminProfile.email);
+    if (newUsername.trim()) updates.username = newUsername.trim();
+    if (Object.keys(updates).length > 0) {
+      onProfileUpdate(updates);
+    }
     setNewEmail("");
+    setNewUsername("");
+    setCredCurrentPassword("");
     setCredSuccess(true);
     setTimeout(() => setCredSuccess(false), 4000);
   };
@@ -108,7 +122,7 @@ export default function ChangePasswordPage({ adminProfile, onProfileUpdate }: Ch
   };
 
   return (
-    <div className="max-w-md space-y-6">
+    <div className="w-full max-w-md space-y-4 md:space-y-6">
 
       {/* ── Update Login Credentials ── */}
       <Card className="border border-border shadow-none">
@@ -127,7 +141,8 @@ export default function ChangePasswordPage({ adminProfile, onProfileUpdate }: Ch
               id="cred-current-email"
               type="email"
               value={credCurrentEmail}
-              onChange={(e) => setCredCurrentEmail(e.target.value)}
+              onChange={(e) => { setCredCurrentEmail(e.target.value); setCredSuccess(false); }}
+              placeholder="Current email address"
               className="h-9 text-sm"
             />
           </div>
@@ -146,8 +161,31 @@ export default function ChangePasswordPage({ adminProfile, onProfileUpdate }: Ch
             />
           </div>
 
+          <div>
+            <Label htmlFor="cred-new-username" className="text-xs font-medium mb-1.5 block">
+              New Username <span className="text-muted-foreground">(Optional)</span>
+            </Label>
+            <Input
+              id="cred-new-username"
+              type="text"
+              value={newUsername}
+              onChange={(e) => { setNewUsername(e.target.value); setCredSuccess(false); }}
+              placeholder="Enter new username"
+              className="h-9 text-sm"
+            />
+          </div>
+
+          <PasswordInput
+            id="cred-current-password"
+            label="Current Password"
+            value={credCurrentPassword}
+            onChange={(v) => { setCredCurrentPassword(v); setCredSuccess(false); }}
+            placeholder="Enter current password to confirm"
+          />
+
           <Button
             className="w-full cursor-pointer bg-primary text-primary-foreground hover:bg-primary/90"
+            disabled={!canSaveCred}
             onClick={handleCredSave}
           >
             Save Changes
