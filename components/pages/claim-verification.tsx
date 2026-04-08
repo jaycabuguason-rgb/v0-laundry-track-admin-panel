@@ -1,13 +1,14 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Search, CheckCircle, XCircle, ShieldAlert, AlertTriangle } from "lucide-react";
+import { Search, CheckCircle, XCircle, ShieldAlert, AlertTriangle, Printer } from "lucide-react";
 import QRScanner from "@/components/qr-scanner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { auditLogs as initialLogs, statusColors, type AuditLog, type Transaction } from "@/lib/data";
+import { PrintReceiptModal } from "@/components/print-receipt-modal";
+import { auditLogs as initialLogs, statusColors, type AuditLog, type Transaction, type PaymentStatus } from "@/lib/data";
 import { cn } from "@/lib/utils";
 
 interface ClaimVerificationPageProps {
@@ -23,6 +24,9 @@ export default function ClaimVerificationPage({ transactions, onUpdateTransactio
   const [denyMode, setDenyMode] = useState(false);
   const [denyReason, setDenyReason] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+  const [paymentToggle, setPaymentToggle] = useState<PaymentStatus>("unpaid");
+  const [reprintModalOpen, setReprintModalOpen] = useState(false);
+  const [reprintTransaction, setReprintTransaction] = useState<Transaction | null>(null);
 
   // Update result when transactions change
   useEffect(() => {
@@ -30,9 +34,17 @@ export default function ClaimVerificationPage({ transactions, onUpdateTransactio
       const updated = transactions.find((t) => t.ticketId === result.ticketId);
       if (updated) {
         setResult(updated);
+        setPaymentToggle(updated.paymentStatus);
       }
     }
   }, [transactions, result]);
+
+  // Set payment toggle when result changes
+  useEffect(() => {
+    if (result) {
+      setPaymentToggle(result.paymentStatus);
+    }
+  }, [result]);
 
   const handleSearch = () => {
     const found = transactions.find(
@@ -42,15 +54,16 @@ export default function ClaimVerificationPage({ transactions, onUpdateTransactio
     );
     if (found) {
       setResult(found);
+      setPaymentToggle(found.paymentStatus);
       setNotFound(false);
-      addLog(found.ticketId, "Scanned", "Via Manual Search");
+      addLog(found.ticketId, "Scanned", "Via Manual Search", found.paymentStatus, found.customerName);
     } else {
       setResult(null);
       setNotFound(true);
     }
   };
 
-  const addLog = (ticketId: string, action: AuditLog["action"], notes: string) => {
+  const addLog = (ticketId: string, action: AuditLog["action"], notes: string, paymentStatus?: PaymentStatus, customerName?: string) => {
     const newLog: AuditLog = {
       id: String(Date.now()),
       dateTime: new Date().toLocaleString("en-PH", { dateStyle: "short", timeStyle: "short" }),
@@ -58,6 +71,8 @@ export default function ClaimVerificationPage({ transactions, onUpdateTransactio
       action,
       staff: "Admin",
       notes,
+      paymentStatus,
+      customerName,
     };
     setLogs((prev) => [newLog, ...prev]);
   };
@@ -65,15 +80,19 @@ export default function ClaimVerificationPage({ transactions, onUpdateTransactio
   const handleClaim = (isQRScan = false) => {
     if (!result) return;
     
-    // Update transaction status to Claimed
-    onUpdateTransaction(result.ticketId, { status: "Claimed" });
+    // Update transaction status to Claimed AND payment status
+    onUpdateTransaction(result.ticketId, { 
+      status: "Claimed",
+      paymentStatus: paymentToggle 
+    });
     
     // Log the action
     const notes = isQRScan ? "Via QR Scan" : "Via Manual Search";
-    addLog(result.ticketId, "Claimed", notes);
+    addLog(result.ticketId, "Claimed", notes, paymentToggle, result.customerName);
     
     // Show success message
-    setSuccessMessage(`${result.ticketId} has been successfully claimed by ${result.customerName}`);
+    const paymentLabel = paymentToggle === "paid" ? "Paid" : "Unpaid";
+    setSuccessMessage(`${result.ticketId} claimed. Payment marked as ${paymentLabel}.`);
     
     // Clear after 3 seconds
     setTimeout(() => {
@@ -90,11 +109,22 @@ export default function ClaimVerificationPage({ transactions, onUpdateTransactio
 
   const confirmDeny = () => {
     if (!result) return;
-    addLog(result.ticketId, "Denied", denyReason || "No reason provided");
+    addLog(result.ticketId, "Denied", denyReason || "No reason provided", result.paymentStatus, result.customerName);
     setDenyMode(false);
     setDenyReason("");
     setResult(null);
     setQuery("");
+  };
+
+  const handleReprintReceipt = () => {
+    if (!result) return;
+    // Create a copy with the current payment toggle selection
+    const txnForPrint: Transaction = {
+      ...result,
+      paymentStatus: paymentToggle,
+    };
+    setReprintTransaction(txnForPrint);
+    setReprintModalOpen(true);
   };
 
   const actionBadgeColor = (action: AuditLog["action"]) => {
@@ -135,8 +165,9 @@ export default function ClaimVerificationPage({ transactions, onUpdateTransactio
                 );
                 if (found) {
                   setResult(found);
+                  setPaymentToggle(found.paymentStatus);
                   setNotFound(false);
-                  addLog(found.ticketId, "Scanned", "Via QR Scan");
+                  addLog(found.ticketId, "Scanned", "Via QR Scan", found.paymentStatus, found.customerName);
                 } else {
                   setResult(null);
                   setNotFound(true);
@@ -192,18 +223,51 @@ export default function ClaimVerificationPage({ transactions, onUpdateTransactio
                   </div>
                 </div>
                 
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-xs text-muted-foreground">Status:</span>
-                  <span className={cn("px-2 py-0.5 rounded-full text-[11px] font-medium", statusColors[result.status])}>
-                    {result.status}
-                  </span>
-                  <span className="text-xs text-muted-foreground ml-2">Payment:</span>
-                  <span className={cn(
-                    "px-2 py-0.5 rounded-full text-[11px] font-bold uppercase",
-                    result.paymentStatus === "paid" ? "bg-green-500 text-white" : "bg-red-500 text-white"
-                  )}>
-                    {result.paymentStatus}
-                  </span>
+                <div className="space-y-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-xs text-muted-foreground">Status:</span>
+                    <span className={cn("px-2 py-0.5 rounded-full text-[11px] font-medium", statusColors[result.status])}>
+                      {result.status}
+                    </span>
+                    <span className="text-xs text-muted-foreground ml-2">Payment:</span>
+                    <span className={cn(
+                      "px-2 py-0.5 rounded-full text-[11px] font-bold uppercase",
+                      result.paymentStatus === "paid" ? "bg-green-500 text-white" : "bg-red-500 text-white"
+                    )}>
+                      {result.paymentStatus}
+                    </span>
+                  </div>
+
+                  {/* Payment Status Toggle */}
+                  {!isAlreadyClaimed && (
+                    <div className="border border-border rounded-lg p-2.5 bg-muted/20">
+                      <p className="text-[11px] font-semibold text-muted-foreground mb-1.5">Update Payment Status</p>
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant={paymentToggle === "unpaid" ? "default" : "outline"}
+                          className={cn(
+                            "flex-1 h-8 text-xs",
+                            paymentToggle === "unpaid" && "bg-red-500 hover:bg-red-600 text-white"
+                          )}
+                          onClick={() => setPaymentToggle("unpaid")}
+                        >
+                          Unpaid
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant={paymentToggle === "paid" ? "default" : "outline"}
+                          className={cn(
+                            "flex-1 h-8 text-xs",
+                            paymentToggle === "paid" && "bg-green-500 hover:bg-green-600 text-white"
+                          )}
+                          onClick={() => setPaymentToggle("paid")}
+                        >
+                          Paid
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Guard: Already Claimed */}
@@ -229,30 +293,47 @@ export default function ClaimVerificationPage({ transactions, onUpdateTransactio
                 )}
 
                 {!denyMode ? (
-                  <div className="flex flex-wrap gap-2 pt-1">
-                    {!isAlreadyClaimed && (
+                  <div className="space-y-2 pt-1">
+                    <div className="flex flex-wrap gap-2">
+                      {!isAlreadyClaimed && (
+                        <Button
+                          size="sm"
+                          className={cn(
+                            "flex items-center gap-1.5 flex-1 sm:flex-none min-h-[44px] sm:min-h-0 justify-center",
+                            isNotReady 
+                              ? "bg-orange-600 hover:bg-orange-700 text-white" 
+                              : "bg-green-600 hover:bg-green-700 text-white"
+                          )}
+                          onClick={() => handleClaim(false)}
+                        >
+                          {isNotReady ? <AlertTriangle className="w-3.5 h-3.5" /> : <CheckCircle className="w-3.5 h-3.5" />}
+                          {isNotReady ? "⚠ Claim Anyway" : "✓ Confirm Claim & Save"}
+                        </Button>
+                      )}
                       <Button
                         size="sm"
-                        className={cn(
-                          "flex items-center gap-1.5 flex-1 sm:flex-none min-h-[44px] sm:min-h-0 justify-center",
-                          isNotReady 
-                            ? "bg-orange-600 hover:bg-orange-700 text-white" 
-                            : "bg-green-600 hover:bg-green-700 text-white"
-                        )}
-                        onClick={() => handleClaim(false)}
+                        variant="outline"
+                        className="flex items-center gap-1.5 flex-1 sm:flex-none min-h-[44px] sm:min-h-0 justify-center border-blue-200 text-blue-600 hover:bg-blue-50"
+                        onClick={handleReprintReceipt}
                       >
-                        {isNotReady ? <AlertTriangle className="w-3.5 h-3.5" /> : <CheckCircle className="w-3.5 h-3.5" />}
-                        {isNotReady ? "⚠ Claim Anyway" : "✓ Confirm Claim"}
+                        <Printer className="w-3.5 h-3.5" /> 🖨 Reprint Receipt
                       </Button>
+                      {!isAlreadyClaimed && (
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          className="flex items-center gap-1.5 flex-1 sm:flex-none min-h-[44px] sm:min-h-0 justify-center"
+                          onClick={handleDeny}
+                        >
+                          <XCircle className="w-3.5 h-3.5" /> ✗ Deny
+                        </Button>
+                      )}
+                    </div>
+                    {isAlreadyClaimed && (
+                      <p className="text-xs text-muted-foreground text-center">
+                        Ticket already claimed. Use Reprint Receipt to generate a copy.
+                      </p>
                     )}
-                    <Button
-                      size="sm"
-                      variant="destructive"
-                      className="flex items-center gap-1.5 flex-1 sm:flex-none min-h-[44px] sm:min-h-0 justify-center"
-                      onClick={handleDeny}
-                    >
-                      <XCircle className="w-3.5 h-3.5" /> ✗ Deny
-                    </Button>
                   </div>
                 ) : (
                   <div className="space-y-2 pt-1">
@@ -296,10 +377,10 @@ export default function ClaimVerificationPage({ transactions, onUpdateTransactio
         </CardHeader>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[480px]">
+            <table className="w-full text-sm min-w-[700px]">
               <thead>
                 <tr className="border-y border-border bg-muted/40">
-                  {["Date / Time", "Ticket ID", "Action", "Staff", "Notes"].map((h) => (
+                  {["Date / Time", "Ticket ID", "Customer", "Action", "Payment Status", "Staff", "Notes"].map((h) => (
                     <th key={h} className="text-left text-xs font-medium text-muted-foreground px-4 py-2.5 whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
@@ -309,10 +390,23 @@ export default function ClaimVerificationPage({ transactions, onUpdateTransactio
                   <tr key={log.id} className="border-b border-border last:border-0 hover:bg-muted/20">
                     <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">{log.dateTime}</td>
                     <td className="px-4 py-3 text-xs font-mono font-semibold text-primary">{log.ticketId}</td>
+                    <td className="px-4 py-3 text-xs text-muted-foreground">{log.customerName || "—"}</td>
                     <td className="px-4 py-3">
                       <span className={cn("px-2 py-0.5 rounded-full text-[11px] font-medium", actionBadgeColor(log.action))}>
                         {log.action}
                       </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      {log.paymentStatus ? (
+                        <span className={cn(
+                          "px-2 py-0.5 rounded-full text-[11px] font-bold uppercase",
+                          log.paymentStatus === "paid" ? "bg-green-500 text-white" : "bg-red-500 text-white"
+                        )}>
+                          {log.paymentStatus}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-xs text-foreground">{log.staff}</td>
                     <td className="px-4 py-3 text-xs text-muted-foreground">{log.notes || "—"}</td>
@@ -323,6 +417,13 @@ export default function ClaimVerificationPage({ transactions, onUpdateTransactio
           </div>
         </CardContent>
       </Card>
+
+      {/* Print Receipt Modal */}
+      <PrintReceiptModal
+        open={reprintModalOpen}
+        onOpenChange={setReprintModalOpen}
+        transaction={reprintTransaction}
+      />
     </div>
   );
 }
