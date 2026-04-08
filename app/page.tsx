@@ -4,8 +4,9 @@ import { useState } from "react";
 import AppShell from "@/components/app-shell";
 import LoginPage from "@/components/pages/login";
 import ForgotPasswordPage from "@/components/pages/forgot-password";
+import RegisterPage from "@/components/pages/register";
 
-type AuthView = "login" | "forgot-password" | "app";
+type AuthView = "login" | "forgot-password" | "register" | "app";
 
 export interface AdminProfile {
   name: string;
@@ -29,11 +30,16 @@ export default function Home() {
     return <ForgotPasswordPage onBack={() => setView("login")} />;
   }
 
+  if (view === "register") {
+    return <RegisterPage onBack={() => setView("login")} />;
+  }
+
   if (view === "login") {
     return (
       <LoginPage
         onLogin={() => setView("app")}
         onForgotPassword={() => setView("forgot-password")}
+        onCreateAccount={() => setView("register")}
       />
     );
   }
