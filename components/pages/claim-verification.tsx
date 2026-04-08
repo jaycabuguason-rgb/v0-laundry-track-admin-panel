@@ -1,22 +1,38 @@
 "use client";
 
-import { useState } from "react";
-import { Search, CheckCircle, XCircle, ShieldAlert } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Search, CheckCircle, XCircle, ShieldAlert, AlertTriangle } from "lucide-react";
 import QRScanner from "@/components/qr-scanner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { auditLogs as initialLogs, transactions, statusColors, type AuditLog } from "@/lib/data";
+import { auditLogs as initialLogs, statusColors, type AuditLog, type Transaction } from "@/lib/data";
 import { cn } from "@/lib/utils";
 
-export default function ClaimVerificationPage() {
+interface ClaimVerificationPageProps {
+  transactions: Transaction[];
+  onUpdateTransaction: (ticketId: string, updates: Partial<Transaction>) => void;
+}
+
+export default function ClaimVerificationPage({ transactions, onUpdateTransaction }: ClaimVerificationPageProps) {
   const [query, setQuery] = useState("");
-  const [result, setResult] = useState<(typeof transactions)[0] | null>(null);
+  const [result, setResult] = useState<Transaction | null>(null);
   const [notFound, setNotFound] = useState(false);
   const [logs, setLogs] = useState<AuditLog[]>(initialLogs);
-  const [overrideMode, setOverrideMode] = useState(false);
-  const [overridePass, setOverridePass] = useState("");
-  const [overrideReason, setOverrideReason] = useState("");
+  const [denyMode, setDenyMode] = useState(false);
+  const [denyReason, setDenyReason] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
+
+  // Update result when transactions change
+  useEffect(() => {
+    if (result) {
+      const updated = transactions.find((t) => t.ticketId === result.ticketId);
+      if (updated) {
+        setResult(updated);
+      }
+    }
+  }, [transactions, result]);
 
   const handleSearch = () => {
     const found = transactions.find(
@@ -27,7 +43,7 @@ export default function ClaimVerificationPage() {
     if (found) {
       setResult(found);
       setNotFound(false);
-      addLog(found.ticketId, "Scanned", "");
+      addLog(found.ticketId, "Scanned", "Via Manual Search");
     } else {
       setResult(null);
       setNotFound(true);
@@ -46,32 +62,39 @@ export default function ClaimVerificationPage() {
     setLogs((prev) => [newLog, ...prev]);
   };
 
-  const handleClaim = () => {
+  const handleClaim = (isQRScan = false) => {
     if (!result) return;
-    addLog(result.ticketId, "Claimed", "");
-    setResult(null);
-    setQuery("");
+    
+    // Update transaction status to Claimed
+    onUpdateTransaction(result.ticketId, { status: "Claimed" });
+    
+    // Log the action
+    const notes = isQRScan ? "Via QR Scan" : "Via Manual Search";
+    addLog(result.ticketId, "Claimed", notes);
+    
+    // Show success message
+    setSuccessMessage(`${result.ticketId} has been successfully claimed by ${result.customerName}`);
+    
+    // Clear after 3 seconds
+    setTimeout(() => {
+      setResult(null);
+      setQuery("");
+      setSuccessMessage("");
+    }, 3000);
   };
 
   const handleDeny = () => {
     if (!result) return;
-    addLog(result.ticketId, "Denied", "Not authorized");
-    setResult(null);
-    setQuery("");
+    setDenyMode(true);
   };
 
-  const handleOverride = () => {
+  const confirmDeny = () => {
     if (!result) return;
-    if (overridePass !== "admin123") {
-      alert("Incorrect password");
-      return;
-    }
-    addLog(result.ticketId, "Override", overrideReason);
-    setOverrideMode(false);
+    addLog(result.ticketId, "Denied", denyReason || "No reason provided");
+    setDenyMode(false);
+    setDenyReason("");
     setResult(null);
     setQuery("");
-    setOverridePass("");
-    setOverrideReason("");
   };
 
   const actionBadgeColor = (action: AuditLog["action"]) => {
@@ -83,8 +106,19 @@ export default function ClaimVerificationPage() {
     }
   };
 
+  const isAlreadyClaimed = result?.status === "Claimed";
+  const isNotReady = result && result.status !== "Ready" && result.status !== "Claimed";
+
   return (
     <div className="space-y-4 md:space-y-6">
+      {/* Success Banner */}
+      {successMessage && (
+        <div className="bg-green-50 border border-green-200 text-green-800 rounded-lg px-4 py-3 text-sm flex items-start gap-2 animate-in fade-in slide-in-from-top-2">
+          <CheckCircle className="w-4 h-4 shrink-0 mt-0.5 text-green-600" />
+          <span>{successMessage}</span>
+        </div>
+      )}
+
       {/* QR + Manual — stack on mobile, side-by-side on lg */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
         {/* QR Scanner */}
@@ -102,7 +136,7 @@ export default function ClaimVerificationPage() {
                 if (found) {
                   setResult(found);
                   setNotFound(false);
-                  addLog(found.ticketId, "Scanned", "QR scan");
+                  addLog(found.ticketId, "Scanned", "Via QR Scan");
                 } else {
                   setResult(null);
                   setNotFound(true);
@@ -142,71 +176,110 @@ export default function ClaimVerificationPage() {
               <div className="rounded-lg border border-border p-3 md:p-4 space-y-3">
                 <div className="grid grid-cols-2 gap-2 text-sm">
                   {[
-                    { label: "Customer",            value: result.customerName,    span: false },
                     { label: "Ticket ID",           value: result.ticketId,        span: false },
-                    { label: "Arrival Date & Time", value: result.arrivalDateTime, span: true  },
-                    { label: "Wash Type",           value: result.washType,        span: false },
+                    { label: "Customer",            value: result.customerName,    span: false },
                     { label: "Drop-off Date",       value: result.dropOffDate,     span: false },
+                    { label: "Wash Type",           value: result.washType,        span: false },
                   ].map((r) => (
                     <div key={r.label} className={`bg-muted/30 rounded p-2.5${r.span ? " col-span-2" : ""}`}>
                       <p className="text-[11px] text-muted-foreground">{r.label}</p>
                       <p className="font-medium text-xs text-foreground mt-0.5">{r.value}</p>
                     </div>
                   ))}
+                  <div className="bg-muted/30 rounded p-2.5">
+                    <p className="text-[11px] text-muted-foreground">Total Fee</p>
+                    <p className="font-medium text-xs text-foreground mt-0.5">₱{result.fee.toLocaleString()}</p>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
+                
+                <div className="flex flex-wrap items-center gap-2">
                   <span className="text-xs text-muted-foreground">Status:</span>
                   <span className={cn("px-2 py-0.5 rounded-full text-[11px] font-medium", statusColors[result.status])}>
                     {result.status}
                   </span>
+                  <span className="text-xs text-muted-foreground ml-2">Payment:</span>
+                  <span className={cn(
+                    "px-2 py-0.5 rounded-full text-[11px] font-bold uppercase",
+                    result.paymentStatus === "paid" ? "bg-green-500 text-white" : "bg-red-500 text-white"
+                  )}>
+                    {result.paymentStatus}
+                  </span>
                 </div>
 
-                {!overrideMode ? (
+                {/* Guard: Already Claimed */}
+                {isAlreadyClaimed && (
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-sm text-yellow-800 flex items-start gap-2">
+                    <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-yellow-600" />
+                    <div>
+                      <p className="font-semibold">Already Claimed</p>
+                      <p className="text-xs mt-0.5">This ticket has already been claimed.</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Guard: Not Ready */}
+                {isNotReady && (
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-sm text-yellow-800 flex items-start gap-2">
+                    <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-yellow-600" />
+                    <div>
+                      <p className="font-semibold">Not Ready for Pickup</p>
+                      <p className="text-xs mt-0.5">Current status: {result.status}</p>
+                    </div>
+                  </div>
+                )}
+
+                {!denyMode ? (
                   <div className="flex flex-wrap gap-2 pt-1">
-                    <Button
-                      size="sm"
-                      className="bg-green-600 hover:bg-green-700 text-white flex items-center gap-1.5 flex-1 sm:flex-none min-h-[44px] sm:min-h-0 justify-center"
-                      onClick={handleClaim}
-                    >
-                      <CheckCircle className="w-3.5 h-3.5" /> Claim
-                    </Button>
+                    {!isAlreadyClaimed && (
+                      <Button
+                        size="sm"
+                        className={cn(
+                          "flex items-center gap-1.5 flex-1 sm:flex-none min-h-[44px] sm:min-h-0 justify-center",
+                          isNotReady 
+                            ? "bg-orange-600 hover:bg-orange-700 text-white" 
+                            : "bg-green-600 hover:bg-green-700 text-white"
+                        )}
+                        onClick={() => handleClaim(false)}
+                      >
+                        {isNotReady ? <AlertTriangle className="w-3.5 h-3.5" /> : <CheckCircle className="w-3.5 h-3.5" />}
+                        {isNotReady ? "⚠ Claim Anyway" : "✓ Confirm Claim"}
+                      </Button>
+                    )}
                     <Button
                       size="sm"
                       variant="destructive"
                       className="flex items-center gap-1.5 flex-1 sm:flex-none min-h-[44px] sm:min-h-0 justify-center"
                       onClick={handleDeny}
                     >
-                      <XCircle className="w-3.5 h-3.5" /> Deny
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="flex items-center gap-1.5 text-orange-600 border-orange-200 hover:bg-orange-50 w-full sm:w-auto min-h-[44px] sm:min-h-0 justify-center"
-                      onClick={() => setOverrideMode(true)}
-                    >
-                      <ShieldAlert className="w-3.5 h-3.5" /> Override Release
+                      <XCircle className="w-3.5 h-3.5" /> ✗ Deny
                     </Button>
                   </div>
                 ) : (
                   <div className="space-y-2 pt-1">
-                    <Input
-                      type="password"
-                      placeholder="Enter admin password..."
-                      value={overridePass}
-                      onChange={(e) => setOverridePass(e.target.value)}
-                      className="h-9 text-sm"
-                    />
-                    <Input
-                      placeholder="Reason for override..."
-                      value={overrideReason}
-                      onChange={(e) => setOverrideReason(e.target.value)}
-                      className="h-9 text-sm"
+                    <Textarea
+                      placeholder="Reason for denial (optional)..."
+                      value={denyReason}
+                      onChange={(e) => setDenyReason(e.target.value)}
+                      className="text-sm resize-none"
+                      rows={2}
                     />
                     <div className="flex gap-2">
-                      <Button size="sm" className="bg-orange-600 hover:bg-orange-700 text-white flex-1 min-h-[44px] sm:min-h-0 justify-center" onClick={handleOverride}>
-                        Confirm Override
+                      <Button 
+                        size="sm" 
+                        variant="destructive" 
+                        className="flex-1 min-h-[44px] sm:min-h-0 justify-center" 
+                        onClick={confirmDeny}
+                      >
+                        Confirm Deny
                       </Button>
-                      <Button size="sm" variant="outline" className="flex-1 min-h-[44px] sm:min-h-0 justify-center" onClick={() => setOverrideMode(false)}>Cancel</Button>
+                      <Button 
+                        size="sm" 
+                        variant="outline" 
+                        className="flex-1 min-h-[44px] sm:min-h-0 justify-center" 
+                        onClick={() => setDenyMode(false)}
+                      >
+                        Cancel
+                      </Button>
                     </div>
                   </div>
                 )}
