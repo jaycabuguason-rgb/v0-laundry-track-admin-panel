@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Search, ChevronLeft, Star, X } from "lucide-react";
+import { Search, ChevronLeft, Star, X, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -21,7 +21,7 @@ function StampDots({ count, max = 21 }: { count: number; max?: number }) {
   );
 }
 
-export default function LoyaltyPage() {
+export default function LoyaltyPage({ loyaltyEnabled = true }: { loyaltyEnabled?: boolean }) {
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<LoyaltyMember | null>(null);
   const [rewardCycleModal, setRewardCycleModal] = useState<{ date: string; reward: string } | null>(null);
@@ -228,6 +228,19 @@ export default function LoyaltyPage() {
 
   return (
     <div className="space-y-4">
+      {/* Disabled Banner */}
+      {!loyaltyEnabled && (
+        <div className="flex items-start gap-3 bg-yellow-50 border border-yellow-300 text-yellow-900 rounded-lg px-4 py-3">
+          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-yellow-600" />
+          <div className="space-y-0.5">
+            <p className="text-sm font-semibold">Loyalty Program is currently disabled.</p>
+            <p className="text-xs text-yellow-800">
+              New transactions will not earn stamps. Go to Settings &rarr; Loyalty Program to re-enable.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Search */}
       <div className="flex gap-3">
         <div className="relative flex-1 max-w-sm">

@@ -62,12 +62,27 @@ export const DEFAULT_BUSINESS_PROFILE: BusinessProfile = {
   receiptFooter: "Thank you for choosing Sunshine Laundry Shop!",
 };
 
+// ─── Loyalty Settings ─────────────────────────────────────────────────────────
+
+export interface LoyaltySettings {
+  enabled: boolean;
+  washesPerReward: string;
+  rewardDescription: string;
+}
+
+export const DEFAULT_LOYALTY_SETTINGS: LoyaltySettings = {
+  enabled:           true,
+  washesPerReward:   "10",
+  rewardDescription: "Free wash",
+};
+
 // ─── localStorage keys ───────────────────────────────────────────────────────
 
-export const LS_SERVICE_TYPES    = "laundrytrack_service_types";
-export const LS_ADDONS           = "laundrytrack_addons";
-export const LS_PRICING_CONFIG   = "laundrytrack_pricing_config";
-export const LS_BUSINESS_PROFILE = "laundrytrack_business_profile";
+export const LS_SERVICE_TYPES     = "laundrytrack_service_types";
+export const LS_ADDONS            = "laundrytrack_addons";
+export const LS_PRICING_CONFIG    = "laundrytrack_pricing_config";
+export const LS_BUSINESS_PROFILE  = "laundrytrack_business_profile";
+export const LS_LOYALTY_SETTINGS  = "laundrytrack_loyalty_settings";
 
 // ─── Defaults ────────────────────────────────────────────────────────────────
 
@@ -147,4 +162,12 @@ export function loadBusinessProfile(): BusinessProfile {
 
 export function persistBusinessProfile(profile: BusinessProfile): void {
   persist(LS_BUSINESS_PROFILE, profile);
+}
+
+export function loadLoyaltySettings(): LoyaltySettings {
+  return load(LS_LOYALTY_SETTINGS, DEFAULT_LOYALTY_SETTINGS);
+}
+
+export function persistLoyaltySettings(settings: LoyaltySettings): void {
+  persist(LS_LOYALTY_SETTINGS, settings);
 }
