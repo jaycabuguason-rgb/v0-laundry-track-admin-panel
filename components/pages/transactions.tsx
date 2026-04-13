@@ -147,7 +147,7 @@ function StampCard({ count, highlight }: { count: number; highlight?: boolean })
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Member Card
-// ──────────────────────────────────────────────────────────��──────────────────
+// ──────────────────────────────────────────────────────────���──────────────────
 function MemberCard({ member, onClear, stampAfter }: { member: LoyaltyMember; onClear?: () => void; stampAfter?: boolean }) {
   const completedCycles = Math.floor(member.stampCount / STAMP_MILESTONE);
   const currentStamp    = member.stampCount % STAMP_MILESTONE;
@@ -1030,6 +1030,7 @@ export default function TransactionsPage({ transactions: _unused, loyaltyEnabled
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterPayment, setFilterPayment] = useState("all");
   const [filterDate, setFilterDate] = useState<Date | undefined>(undefined);
+  const [sortBy, setSortBy] = useState<"smart" | "newest" | "oldest" | "unpaid-first" | "ready-first" | "status-az">("smart");
 
   // New Transaction wizard
   const [showWizard, setShowWizard] = useState(false);
@@ -1141,16 +1142,79 @@ export default function TransactionsPage({ transactions: _unused, loyaltyEnabled
     setPrintPostCreate(true);
   };
 
+  // ── Smart priority scoring ───────────────────────────────────────────────
+  const activeStatuses = new Set(["Received", "Washing", "Drying"]);
+
+  const smartPriority = (t: Transaction): number => {
+    if (t.status === "Voided")  return 90;
+    if (t.status === "Claimed") return 80;
+    // Unpaid + Active (not Ready) — Priority 1
+    if (t.paymentStatus === "unpaid" && activeStatuses.has(t.status)) return 1;
+    // Unpaid + Ready — Priority 2
+    if (t.paymentStatus === "unpaid" && t.status === "Ready") return 2;
+    // Paid + Ready — Priority 3
+    if (t.paymentStatus === "paid" && t.status === "Ready") return 3;
+    // Paid + Active — Priority 4
+    if (t.paymentStatus === "paid" && activeStatuses.has(t.status)) return 4;
+    return 50;
+  };
+
+  // ── Row visual class ─────────────────────────────────────────────────────
+  const rowVisualClass = (t: Transaction): string => {
+    if (t.status === "Voided" || t.status === "Claimed") return "";
+    if (t.paymentStatus === "unpaid" && t.status === "Ready")
+      return "border-l-[3px] border-l-red-500 bg-red-50/40";
+    if (t.paymentStatus === "unpaid" && activeStatuses.has(t.status))
+      return "border-l-[3px] border-l-orange-400 bg-orange-50/30";
+    return "";
+  };
+
   // ── Derived ──────────────────────────────────────────────────────────────
-  const filtered = txns.filter((t) => {
-    const matchSearch =
-      t.customerName.toLowerCase().includes(search.toLowerCase()) ||
-      t.ticketId.toLowerCase().includes(search.toLowerCase());
-    const matchStatus = filterStatus === "all" || t.status === filterStatus;
-    const matchPayment = filterPayment === "all" || t.paymentStatus === filterPayment;
-    const matchDate = !filterDate || t.dropOffDate === format(filterDate, "yyyy-MM-dd");
-    return matchSearch && matchStatus && matchPayment && matchDate;
-  });
+  const filtered = (() => {
+    const base = txns.filter((t) => {
+      const matchSearch =
+        t.customerName.toLowerCase().includes(search.toLowerCase()) ||
+        t.ticketId.toLowerCase().includes(search.toLowerCase());
+      const matchStatus = filterStatus === "all" || t.status === filterStatus;
+      const matchPayment = filterPayment === "all" || t.paymentStatus === filterPayment;
+      const matchDate = !filterDate || t.dropOffDate === format(filterDate, "yyyy-MM-dd");
+      return matchSearch && matchStatus && matchPayment && matchDate;
+    });
+
+    const sorted = [...base];
+    switch (sortBy) {
+      case "smart":
+        sorted.sort((a, b) => {
+          const diff = smartPriority(a) - smartPriority(b);
+          if (diff !== 0) return diff;
+          // Tiebreak: newer arrival first
+          return b.arrivalDateTime.localeCompare(a.arrivalDateTime);
+        });
+        break;
+      case "newest":
+        sorted.sort((a, b) => b.arrivalDateTime.localeCompare(a.arrivalDateTime));
+        break;
+      case "oldest":
+        sorted.sort((a, b) => a.arrivalDateTime.localeCompare(b.arrivalDateTime));
+        break;
+      case "unpaid-first":
+        sorted.sort((a, b) => {
+          if (a.paymentStatus === b.paymentStatus) return 0;
+          return a.paymentStatus === "unpaid" ? -1 : 1;
+        });
+        break;
+      case "ready-first":
+        sorted.sort((a, b) => {
+          if (a.status === b.status) return 0;
+          return a.status === "Ready" ? -1 : b.status === "Ready" ? 1 : 0;
+        });
+        break;
+      case "status-az":
+        sorted.sort((a, b) => a.status.localeCompare(b.status));
+        break;
+    }
+    return sorted;
+  })();
 
 
   const canUndo = historyIdx >= 0;
@@ -1197,6 +1261,19 @@ export default function TransactionsPage({ transactions: _unused, loyaltyEnabled
             <SelectItem value="all">All Payments</SelectItem>
             <SelectItem value="paid">Paid</SelectItem>
             <SelectItem value="unpaid">Unpaid</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={sortBy} onValueChange={(v) => setSortBy(v as typeof sortBy)}>
+          <SelectTrigger className="w-full sm:w-48 h-10 md:h-9 text-sm">
+            <SelectValue placeholder="Sort by" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="smart">Default (Smart Priority)</SelectItem>
+            <SelectItem value="newest">Newest First</SelectItem>
+            <SelectItem value="oldest">Oldest First</SelectItem>
+            <SelectItem value="unpaid-first">Unpaid First</SelectItem>
+            <SelectItem value="ready-first">Ready First</SelectItem>
+            <SelectItem value="status-az">Status (A-Z)</SelectItem>
           </SelectContent>
         </Select>
         <Popover>
@@ -1267,21 +1344,26 @@ export default function TransactionsPage({ transactions: _unused, loyaltyEnabled
             </thead>
             <tbody>
               {filtered.map((txn) => {
-                const isVoided = txn.status === "Voided";
+                const isVoided  = txn.status === "Voided";
+                const isClaimed = txn.status === "Claimed";
+                const visualCls = rowVisualClass(txn);
                 return (
                   <tr
                     key={txn.id}
                     className={cn(
                       "border-b border-border last:border-0 transition-colors",
-                      isVoided ? "bg-muted/30 opacity-50" : "hover:bg-muted/20"
+                      isVoided  ? "bg-muted/30 opacity-50" : "",
+                      isClaimed ? "text-muted-foreground/60" : "",
+                      !isVoided && !isClaimed ? "hover:bg-muted/20" : "",
+                      visualCls
                     )}
                   >
-                    <td className={cn("px-4 py-3 text-xs font-mono font-semibold text-primary", isVoided && "line-through")}>{txn.ticketId}</td>
-                    <td className={cn("px-4 py-3 text-xs font-medium text-foreground", isVoided && "line-through")}>{txn.customerName}</td>
-                    <td className={cn("px-4 py-3 text-xs text-muted-foreground whitespace-nowrap hidden md:table-cell", isVoided && "line-through")}>{txn.arrivalDateTime}</td>
-                    <td className={cn("px-4 py-3 text-xs text-muted-foreground hidden sm:table-cell", isVoided && "line-through")}>{txn.weight} kg</td>
-                    <td className={cn("px-4 py-3 text-xs text-muted-foreground hidden md:table-cell", isVoided && "line-through")}>{txn.washType}</td>
-                    <td className={cn("px-4 py-3 text-xs font-medium text-foreground", isVoided && "line-through")}>₱{txn.fee}</td>
+                    <td className={cn("px-4 py-3 text-xs font-mono font-semibold text-primary", isVoided && "line-through", isClaimed && "text-muted-foreground/60")}>{txn.ticketId}</td>
+                    <td className={cn("px-4 py-3 text-xs font-medium", isVoided && "line-through text-foreground", isClaimed ? "text-muted-foreground/60" : "text-foreground")}>{txn.customerName}</td>
+                    <td className={cn("px-4 py-3 text-xs text-muted-foreground whitespace-nowrap hidden md:table-cell", isVoided && "line-through", isClaimed && "text-muted-foreground/50")}>{txn.arrivalDateTime}</td>
+                    <td className={cn("px-4 py-3 text-xs text-muted-foreground hidden sm:table-cell", isVoided && "line-through", isClaimed && "text-muted-foreground/50")}>{txn.weight} kg</td>
+                    <td className={cn("px-4 py-3 text-xs text-muted-foreground hidden md:table-cell", isVoided && "line-through", isClaimed && "text-muted-foreground/50")}>{txn.washType}</td>
+                    <td className={cn("px-4 py-3 text-xs font-medium", isVoided && "line-through text-foreground", isClaimed ? "text-muted-foreground/60" : "text-foreground")}>₱{txn.fee}</td>
                     <td className="px-4 py-3 hidden sm:table-cell">
                       <span className={cn(
                         "inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap",
