@@ -5,6 +5,7 @@ import Sidebar, { type Page } from "@/components/sidebar";
 import TopNav from "@/components/topnav";
 import { TransactionDetailModal } from "@/components/transaction-detail-modal";
 import { transactions, type Transaction } from "@/lib/data";
+import { loadLoyaltySettings } from "@/lib/settings-store";
 import DashboardPage from "@/components/pages/dashboard";
 import TransactionsPage from "@/components/pages/transactions";
 import ClaimVerificationPage from "@/components/pages/claim-verification";
@@ -28,6 +29,7 @@ export default function AppShell({ onSignOut, adminProfile, onProfileUpdate }: A
   const [detailTxn, setDetailTxn] = useState<Transaction | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [txns, setTxns] = useState<Transaction[]>(transactions);
+  const [loyaltyEnabled, setLoyaltyEnabled] = useState<boolean>(() => loadLoyaltySettings().enabled);
 
   const handleTransactionDetail = (ticketId: string) => {
     const txn = txns.find((t) => t.ticketId === ticketId) ?? null;
@@ -41,8 +43,8 @@ export default function AppShell({ onSignOut, adminProfile, onProfileUpdate }: A
 
   const renderPage = () => {
     switch (activePage) {
-      case "dashboard": return <DashboardPage transactions={txns} />;
-      case "transactions": return <TransactionsPage transactions={txns} />;
+      case "dashboard": return <DashboardPage transactions={txns} loyaltyEnabled={loyaltyEnabled} />;
+      case "transactions": return <TransactionsPage transactions={txns} loyaltyEnabled={loyaltyEnabled} />;
       case "claim-verification": return <ClaimVerificationPage transactions={txns} onUpdateTransaction={handleUpdateTransaction} />;
       case "reports": return <ReportsPage />;
       case "settings-pricing":
@@ -50,12 +52,14 @@ export default function AppShell({ onSignOut, adminProfile, onProfileUpdate }: A
       case "settings-business-profile":
       case "settings-backup":
         return <SettingsPage page={activePage} />;
+      case "settings-loyalty":
+        return <SettingsPage page={activePage} loyaltyEnabled={loyaltyEnabled} onLoyaltyEnabledChange={setLoyaltyEnabled} />;
       case "settings-data-import":
         return <DataImportPage onViewTransactions={() => handleNavigate("transactions")} />;
-      case "loyalty": return <LoyaltyPage />;
+      case "loyalty": return <LoyaltyPage loyaltyEnabled={loyaltyEnabled} />;
       case "profile": return <ProfilePage adminProfile={adminProfile} />;
       case "change-password": return <ChangePasswordPage adminProfile={adminProfile} onProfileUpdate={onProfileUpdate} />;
-      default: return <DashboardPage transactions={txns} />;
+      default: return <DashboardPage transactions={txns} loyaltyEnabled={loyaltyEnabled} />;
     }
   };
 
@@ -83,7 +87,7 @@ export default function AppShell({ onSignOut, adminProfile, onProfileUpdate }: A
           ${mobileMenuOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}
         `}
       >
-        <Sidebar activePage={activePage} onNavigate={handleNavigate} />
+        <Sidebar activePage={activePage} onNavigate={handleNavigate} loyaltyEnabled={loyaltyEnabled} />
       </div>
 
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
