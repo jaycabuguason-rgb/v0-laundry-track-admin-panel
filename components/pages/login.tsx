@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { Eye, EyeOff, WashingMachine } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { Eye, EyeOff, WashingMachine, CheckCircle2, X, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,21 +10,57 @@ interface LoginPageProps {
   onLogin: () => void;
   onForgotPassword: () => void;
   onCreateAccount: () => void;
+  prefillEmail?: string;
+  showSignupSuccess?: boolean;
+  onDismissSignupSuccess?: () => void;
 }
 
-export default function LoginPage({ onLogin, onForgotPassword, onCreateAccount }: LoginPageProps) {
-  const [email, setEmail] = useState("");
+export default function LoginPage({
+  onLogin,
+  onForgotPassword,
+  onCreateAccount,
+  prefillEmail = "",
+  showSignupSuccess = false,
+  onDismissSignupSuccess,
+}: LoginPageProps) {
+  const [email, setEmail] = useState(prefillEmail);
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState(false);
+  const [showUnverifiedWarning, setShowUnverifiedWarning] = useState(false);
+  const bannerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Sync prefillEmail when it changes (e.g. coming back from register)
+  useEffect(() => {
+    if (prefillEmail) setEmail(prefillEmail);
+  }, [prefillEmail]);
+
+  // Auto-dismiss signup success banner after 6 seconds
+  useEffect(() => {
+    if (showSignupSuccess) {
+      bannerTimerRef.current = setTimeout(() => {
+        onDismissSignupSuccess?.();
+      }, 6000);
+    }
+    return () => {
+      if (bannerTimerRef.current) clearTimeout(bannerTimerRef.current);
+    };
+  }, [showSignupSuccess, onDismissSignupSuccess]);
 
   const handleLogin = () => {
     if (!email.trim() || !password.trim()) {
       setError(true);
+      setShowUnverifiedWarning(false);
       return;
     }
     setError(false);
+    // If arriving from signup and email matches, warn about email verification
+    if (prefillEmail && email.trim().toLowerCase() === prefillEmail.toLowerCase()) {
+      setShowUnverifiedWarning(true);
+      return;
+    }
+    setShowUnverifiedWarning(false);
     onLogin();
   };
 
@@ -58,6 +94,25 @@ export default function LoginPage({ onLogin, onForgotPassword, onCreateAccount }
 
           <h1 className="text-base font-semibold text-foreground text-center mb-6">Admin Login</h1>
 
+          {/* Signup success banner */}
+          {showSignupSuccess && (
+            <div className="mb-4 flex items-start gap-2 rounded-lg bg-green-50 border border-green-200 px-3 py-2.5 text-xs text-green-800 font-medium">
+              <CheckCircle2 className="w-4 h-4 shrink-0 text-green-600 mt-0.5" />
+              <span className="flex-1">Account created successfully! Please verify your email before logging in.</span>
+              <button
+                type="button"
+                onClick={() => {
+                  if (bannerTimerRef.current) clearTimeout(bannerTimerRef.current);
+                  onDismissSignupSuccess?.();
+                }}
+                className="shrink-0 text-green-600 hover:text-green-800 transition-colors cursor-pointer"
+                aria-label="Dismiss"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+
           {/* Error banner */}
           {error && (
             <div className="mb-4 rounded-lg bg-destructive/10 border border-destructive/20 px-3 py-2 text-xs text-destructive font-medium text-center">
@@ -76,7 +131,7 @@ export default function LoginPage({ onLogin, onForgotPassword, onCreateAccount }
                 type="email"
                 placeholder="admin@laundrytrack.ph"
                 value={email}
-                onChange={(e) => { setEmail(e.target.value); setError(false); }}
+                onChange={(e) => { setEmail(e.target.value); setError(false); setShowUnverifiedWarning(false); }}
                 onKeyDown={handleKeyDown}
                 className={error && !email.trim() ? "border-destructive focus-visible:ring-destructive" : ""}
                 autoComplete="email"
@@ -128,6 +183,14 @@ export default function LoginPage({ onLogin, onForgotPassword, onCreateAccount }
             >
               Login
             </Button>
+
+            {/* Unverified email warning */}
+            {showUnverifiedWarning && (
+              <div className="flex items-start gap-2 rounded-lg bg-yellow-50 border border-yellow-300 px-3 py-2.5 text-xs text-yellow-900 font-medium">
+                <AlertTriangle className="w-4 h-4 shrink-0 text-yellow-600 mt-0.5" />
+                Please verify your email first. Check your inbox for a verification link.
+              </div>
+            )}
 
             {/* Forgot password */}
             <button

@@ -25,13 +25,21 @@ const defaultProfile: AdminProfile = {
 export default function Home() {
   const [view, setView] = useState<AuthView>("login");
   const [adminProfile, setAdminProfile] = useState<AdminProfile>(defaultProfile);
+  const [signupEmail, setSignupEmail] = useState("");
+  const [showSignupSuccess, setShowSignupSuccess] = useState(false);
+
+  const handleSignupComplete = (email: string) => {
+    setSignupEmail(email);
+    setShowSignupSuccess(true);
+    setView("login");
+  };
 
   if (view === "forgot-password") {
     return <ForgotPasswordPage onBack={() => setView("login")} />;
   }
 
   if (view === "register") {
-    return <RegisterPage onBack={() => setView("login")} />;
+    return <RegisterPage onBack={() => setView("login")} onSignupComplete={handleSignupComplete} />;
   }
 
   if (view === "login") {
@@ -40,6 +48,9 @@ export default function Home() {
         onLogin={() => setView("app")}
         onForgotPassword={() => setView("forgot-password")}
         onCreateAccount={() => setView("register")}
+        prefillEmail={signupEmail}
+        showSignupSuccess={showSignupSuccess}
+        onDismissSignupSuccess={() => setShowSignupSuccess(false)}
       />
     );
   }
