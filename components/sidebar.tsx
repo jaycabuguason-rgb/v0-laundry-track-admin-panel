@@ -19,6 +19,7 @@ import {
   PanelLeftOpen,
   WashingMachine,
   Upload,
+  Gift,
 } from "lucide-react";
 
 export type Page =
@@ -30,6 +31,7 @@ export type Page =
   | "settings-service-types"
   | "settings-business-profile"
   | "settings-backup"
+  | "settings-loyalty"
   | "loyalty"
   | "profile"
   | "change-password"
@@ -38,6 +40,7 @@ export type Page =
 interface SidebarProps {
   activePage: Page;
   onNavigate: (page: Page) => void;
+  loyaltyEnabled: boolean;
 }
 
 const navItems = [
@@ -52,11 +55,12 @@ const settingsSubItems = [
   { id: "settings-pricing" as Page, label: "Pricing", icon: DollarSign },
   { id: "settings-service-types" as Page, label: "Service Types", icon: Tag },
   { id: "settings-business-profile" as Page, label: "Business Profile", icon: Building2 },
+  { id: "settings-loyalty" as Page, label: "Loyalty Program", icon: Gift },
   { id: "settings-backup" as Page, label: "Backup & Restore", icon: Database },
   { id: "settings-data-import" as Page, label: "Data Import", icon: Upload },
 ];
 
-export default function Sidebar({ activePage, onNavigate }: SidebarProps) {
+export default function Sidebar({ activePage, onNavigate, loyaltyEnabled }: SidebarProps) {
   // On desktop: user can collapse to icon-only. On tablet (md): starts collapsed.
   const [collapsed, setCollapsed] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(activePage.startsWith("settings"));
@@ -105,7 +109,16 @@ export default function Sidebar({ activePage, onNavigate }: SidebarProps) {
                   )}
                 >
                   <Icon className="w-5 h-5 shrink-0" />
-                  {!effectiveCollapsed && <span className="truncate">{item.label}</span>}
+                  {!effectiveCollapsed && (
+                    <span className="flex-1 flex items-center gap-2 truncate">
+                      <span className="truncate">{item.label}</span>
+                      {item.id === "loyalty" && !loyaltyEnabled && (
+                        <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-muted/40 text-sidebar-foreground/50 border border-sidebar-border/40">
+                          Disabled
+                        </span>
+                      )}
+                    </span>
+                  )}
                 </button>
               </li>
             );

@@ -65,7 +65,7 @@ const summaryCards = [
   },
 ];
 
-export default function DashboardPage() {
+export default function DashboardPage({ loyaltyEnabled = true }: { transactions?: unknown; loyaltyEnabled?: boolean }) {
   const [selectedTxn, setSelectedTxn] = useState<Transaction | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
 
@@ -188,10 +188,19 @@ export default function DashboardPage() {
                 <div className="w-10 h-10 rounded-lg bg-yellow-50 flex items-center justify-center shrink-0">
                   <Users className="w-5 h-5 text-yellow-600" />
                 </div>
-                <div>
-                  <p className="text-xs text-muted-foreground font-medium">Loyalty Members</p>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="text-xs text-muted-foreground font-medium">Loyalty Members</p>
+                    {!loyaltyEnabled && (
+                      <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-muted text-muted-foreground border border-border">
+                        Disabled
+                      </span>
+                    )}
+                  </div>
                   <p className="text-2xl font-bold text-foreground">{loyaltyMembers.length}</p>
-                  <p className="text-xs text-muted-foreground">Active enrolled members</p>
+                  <p className="text-xs text-muted-foreground">
+                    {loyaltyEnabled ? "Active enrolled members" : "Program currently off"}
+                  </p>
                 </div>
               </div>
             </CardContent>

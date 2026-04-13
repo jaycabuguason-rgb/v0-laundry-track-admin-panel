@@ -147,7 +147,7 @@ function StampCard({ count, highlight }: { count: number; highlight?: boolean })
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Member Card
-// ─────────────────────────────────────────────────────────────────────────────
+// ──────────────────────────────────────────────────────────��──────────────────
 function MemberCard({ member, onClear, stampAfter }: { member: LoyaltyMember; onClear?: () => void; stampAfter?: boolean }) {
   const completedCycles = Math.floor(member.stampCount / STAMP_MILESTONE);
   const currentStamp    = member.stampCount % STAMP_MILESTONE;
@@ -228,10 +228,12 @@ function NewTransactionWizard({
   open,
   onClose,
   onSubmit,
+  loyaltyEnabled = true,
 }: {
   open: boolean;
   onClose: () => void;
   onSubmit: (txn: Omit<Transaction, "id" | "ticketId">) => void;
+  loyaltyEnabled?: boolean;
 }) {
   // Dynamic settings loaded from shared store
   const [serviceTypes, setServiceTypes]   = useState<ServiceType[]>([]);
@@ -356,7 +358,7 @@ function NewTransactionWizard({
   const weight          = parseFloat(form.weight) || 0;
   const minWeightNum    = parseFloat(minWeight) || 0;
 
-  // ── Fee calculation ────────────────────────────────────────────────────────
+  // ── Fee calculation ──────────────────────────────────────────���─────────────
   let baseFee = 0;
   if (effectiveMode === "per-load" && selectedTier) {
     baseFee = parseFloat(selectedTier.price) || 0;
@@ -375,7 +377,7 @@ function NewTransactionWizard({
   const computeFee = () => totalFee;
 
   const step1Valid =
-    form.customerType === "walkin"
+    !loyaltyEnabled || form.customerType === "walkin"
       ? form.customerName.trim().length > 0
       : form.loyaltyMember !== null;
 
@@ -410,46 +412,48 @@ function NewTransactionWizard({
   // ── Step 1: Customer Information ──────────────────────────────────────────
   const renderStep1 = () => (
     <div className="space-y-4">
-      {/* Customer type selector */}
-      <div className="grid grid-cols-2 gap-3">
-        {([
-          { type: "walkin",  icon: User,  label: "Walk-in Customer",  sub: "No loyalty account" },
-          { type: "loyalty", icon: Star,  label: "Loyalty Member",     sub: "Has a loyalty account" },
-        ] as const).map(({ type, icon: Icon, label, sub }) => (
-          <button
-            key={type}
-            onClick={() => {
-              setForm((f) => ({ ...f, customerType: type, loyaltyMember: null, customerName: "", phone: "" }));
-              setMemberSearch(""); setMemberSearchRes([]); setManualId(""); setManualError(""); setShowScanner(false);
-            }}
-            className={cn(
-              "flex flex-col items-center gap-2 rounded-xl border-2 p-4 text-center transition-all cursor-pointer",
-              form.customerType === type
-                ? "border-primary bg-primary/5 shadow-sm"
-                : "border-border bg-background hover:border-primary/40 hover:bg-muted/20"
-            )}
-          >
-            <div className={cn(
-              "w-10 h-10 rounded-full flex items-center justify-center",
-              form.customerType === type ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
-            )}>
-              <Icon className="w-5 h-5" />
-            </div>
-            <div>
-              <p className={cn("text-sm font-semibold", form.customerType === type ? "text-primary" : "text-foreground")}>{label}</p>
-              <p className="text-[11px] text-muted-foreground mt-0.5">{sub}</p>
-            </div>
-            {form.customerType === type && (
-              <div className="w-5 h-5 rounded-full bg-primary flex items-center justify-center">
-                <Check className="w-3 h-3 text-primary-foreground" />
+      {/* Customer type selector — only shown when loyalty is enabled */}
+      {loyaltyEnabled && (
+        <div className="grid grid-cols-2 gap-3">
+          {([
+            { type: "walkin",  icon: User,  label: "Walk-in Customer",  sub: "No loyalty account" },
+            { type: "loyalty", icon: Star,  label: "Loyalty Member",     sub: "Has a loyalty account" },
+          ] as const).map(({ type, icon: Icon, label, sub }) => (
+            <button
+              key={type}
+              onClick={() => {
+                setForm((f) => ({ ...f, customerType: type, loyaltyMember: null, customerName: "", phone: "" }));
+                setMemberSearch(""); setMemberSearchRes([]); setManualId(""); setManualError(""); setShowScanner(false);
+              }}
+              className={cn(
+                "flex flex-col items-center gap-2 rounded-xl border-2 p-4 text-center transition-all cursor-pointer",
+                form.customerType === type
+                  ? "border-primary bg-primary/5 shadow-sm"
+                  : "border-border bg-background hover:border-primary/40 hover:bg-muted/20"
+              )}
+            >
+              <div className={cn(
+                "w-10 h-10 rounded-full flex items-center justify-center",
+                form.customerType === type ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+              )}>
+                <Icon className="w-5 h-5" />
               </div>
-            )}
-          </button>
-        ))}
-      </div>
+              <div>
+                <p className={cn("text-sm font-semibold", form.customerType === type ? "text-primary" : "text-foreground")}>{label}</p>
+                <p className="text-[11px] text-muted-foreground mt-0.5">{sub}</p>
+              </div>
+              {form.customerType === type && (
+                <div className="w-5 h-5 rounded-full bg-primary flex items-center justify-center">
+                  <Check className="w-3 h-3 text-primary-foreground" />
+                </div>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
 
-      {/* Walk-in fields */}
-      {form.customerType === "walkin" && (
+      {/* Walk-in fields — shown always if loyalty disabled, or when walkin is selected */}
+      {(!loyaltyEnabled || form.customerType === "walkin") && (
         <div className="space-y-3 pt-1">
           <div>
             <label className="text-xs font-medium text-foreground block mb-1.5">
@@ -998,7 +1002,7 @@ function NewTransactionWizard({
   );
 }
 
-// ── Toast ────────────────────────────────────────────────────────────────────
+// ── Toast ────────��───────────────────────────────────────────────────────────
 function Toast({ message, onDone }: { message: string; onDone: () => void }) {
   return (
     <div
@@ -1017,7 +1021,7 @@ type HistoryEntry = {
   description: string;
 };
 
-export default function TransactionsPage() {
+export default function TransactionsPage({ transactions: _unused, loyaltyEnabled = true }: { transactions?: unknown; loyaltyEnabled?: boolean }) {
   const [txns, setTxns] = useState<Transaction[]>(initialTxns);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [historyIdx, setHistoryIdx] = useState(-1);
@@ -1615,6 +1619,7 @@ export default function TransactionsPage() {
         open={showWizard}
         onClose={() => setShowWizard(false)}
         onSubmit={handleNewTransaction}
+        loyaltyEnabled={loyaltyEnabled}
       />
 
       {/* ── PRINT RECEIPT MODAL ──────────────────────────────────────────────── */}

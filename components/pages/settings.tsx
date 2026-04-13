@@ -38,6 +38,8 @@ import {
   persistPricingConfig,
   loadBusinessProfile,
   persistBusinessProfile,
+  loadLoyaltySettings,
+  persistLoyaltySettings,
 } from "@/lib/settings-store";
 
 // ─── Pricing ────────────────────────────────────────────────────────────────
@@ -54,10 +56,6 @@ function PricingSettings() {
   const [newTierName, setNewTierName]   = useState("");
   const [newTierRange, setNewTierRange] = useState("");
   const [newTierPrice, setNewTierPrice] = useState("");
-
-  // Loyalty
-  const [washesPerReward, setWashesPerReward] = useState("10");
-  const [rewardDescription, setRewardDescription] = useState("Free wash");
 
   // Add-ons — initialised from shared store
   const [addOns, setAddOns] = useState<AddOn[]>(() => loadAddOns());
@@ -268,39 +266,6 @@ function PricingSettings() {
         </CardContent>
       </Card>
 
-      {/* ── Loyalty Milestone ────────────────────────────────────────────── */}
-      <Card className="border border-border shadow-none">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm">Loyalty Rewards</CardTitle>
-          <CardDescription className="text-xs">Configure how customers earn rewards based on their washes.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="space-y-2">
-            <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Loyalty Reward</Label>
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-sm text-muted-foreground shrink-0">Every</span>
-              <Input
-                type="number"
-                min="1"
-                value={washesPerReward}
-                onChange={(e) => setWashesPerReward(e.target.value)}
-                className="w-16 h-9 text-sm text-center"
-              />
-              <span className="text-sm text-muted-foreground shrink-0">washes =</span>
-              <Input
-                placeholder="e.g. Free wash, 50% discount, Free fabcon"
-                value={rewardDescription}
-                onChange={(e) => setRewardDescription(e.target.value)}
-                className="flex-1 min-w-48 h-9 text-sm"
-              />
-            </div>
-            <p className="text-[11px] text-muted-foreground">
-              Example: Every 10 washes = Free wash
-            </p>
-          </div>
-        </CardContent>
-      </Card>
-
       {/* ── Add-on Rates ─────────────────────────────────────────────────── */}
       <Card className="border border-border shadow-none">
         <CardHeader className="pb-3">
@@ -311,7 +276,7 @@ function PricingSettings() {
             {addOns.map((a) => (
               <div key={a.id} className="flex items-center gap-2 bg-muted/30 rounded-md px-3 py-2">
                 <span className="flex-1 text-sm text-foreground">{a.name}</span>
-                <span className="text-sm text-muted-foreground">₱{a.rate}</span>
+                <span className="text-sm text-muted-foreground">���{a.rate}</span>
                 <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => {
                   const next = addOns.filter((x) => x.id !== a.id);
                   setAddOns(next);
@@ -1112,12 +1077,117 @@ function BackupSettings() {
   );
 }
 
+// ─── Loyalty Program Settings ─────────────────────────────────────────────────
+
+interface LoyaltyProgramSettingsProps {
+  loyaltyEnabled: boolean;
+  onLoyaltyEnabledChange: (val: boolean) => void;
+}
+
+function LoyaltyProgramSettings({ loyaltyEnabled, onLoyaltyEnabledChange }: LoyaltyProgramSettingsProps) {
+  const [enabled, setEnabled] = useState(loyaltyEnabled);
+  const [washesPerReward, setWashesPerReward] = useState(
+    () => loadLoyaltySettings().washesPerReward
+  );
+  const [rewardDescription, setRewardDescription] = useState(
+    () => loadLoyaltySettings().rewardDescription
+  );
+  const [saved, setSaved] = useState(false);
+
+  const handleSave = () => {
+    persistLoyaltySettings({ enabled, washesPerReward, rewardDescription });
+    onLoyaltyEnabledChange(enabled);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 3000);
+  };
+
+  return (
+    <div className="space-y-4 w-full max-w-lg">
+      {saved && (
+        <div className="flex items-center gap-2 bg-green-50 border border-green-200 text-green-800 rounded-lg px-4 py-3 text-sm animate-in fade-in slide-in-from-top-2">
+          <CheckCircle2 className="w-4 h-4 shrink-0 text-green-600" />
+          Loyalty program settings saved!
+        </div>
+      )}
+
+      {/* Master toggle */}
+      <Card className="border border-border shadow-none">
+        <CardContent className="p-4">
+          <div className="flex items-center justify-between gap-4">
+            <div className="space-y-0.5">
+              <Label className="text-sm font-semibold">Enable Loyalty Program</Label>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                When turned off, the Loyalty Member option will be hidden in New Transaction and the Loyalty Members menu will be disabled.
+              </p>
+            </div>
+            <Switch
+              checked={enabled}
+              onCheckedChange={setEnabled}
+              aria-label="Enable loyalty program"
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Reward config — only shown when enabled */}
+      <Card className={cn("border border-border shadow-none transition-opacity", !enabled && "opacity-50 pointer-events-none")}>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm">Reward Configuration</CardTitle>
+          <CardDescription className="text-xs">Configure how customers earn rewards based on their washes.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="space-y-2">
+            <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Loyalty Reward</Label>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-sm text-muted-foreground shrink-0">Every</span>
+              <Input
+                type="number"
+                min="1"
+                value={washesPerReward}
+                onChange={(e) => setWashesPerReward(e.target.value)}
+                className="w-16 h-9 text-sm text-center"
+              />
+              <span className="text-sm text-muted-foreground shrink-0">washes =</span>
+              <Input
+                placeholder="e.g. Free wash, 50% discount, Free fabcon"
+                value={rewardDescription}
+                onChange={(e) => setRewardDescription(e.target.value)}
+                className="flex-1 min-w-40 h-9 text-sm"
+              />
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              Example: Every 10 washes = Free wash
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Button size="sm" onClick={handleSave} className="flex items-center gap-1.5">
+        <Save className="w-3.5 h-3.5" /> Save Changes
+      </Button>
+    </div>
+  );
+}
+
 // ─── Export ──────────────────────────────────────────────────────────────────
-export default function SettingsPage({ page }: { page: Page }) {
+
+interface SettingsPageProps {
+  page: Page;
+  loyaltyEnabled?: boolean;
+  onLoyaltyEnabledChange?: (val: boolean) => void;
+}
+
+export default function SettingsPage({ page, loyaltyEnabled = true, onLoyaltyEnabledChange }: SettingsPageProps) {
   switch (page) {
     case "settings-pricing": return <PricingSettings />;
     case "settings-service-types": return <ServiceTypesSettings />;
     case "settings-business-profile": return <BusinessProfileSettings />;
+    case "settings-loyalty": return (
+      <LoyaltyProgramSettings
+        loyaltyEnabled={loyaltyEnabled}
+        onLoyaltyEnabledChange={onLoyaltyEnabledChange ?? (() => {})}
+      />
+    );
     case "settings-backup": return <BackupSettings />;
     default: return null;
   }
