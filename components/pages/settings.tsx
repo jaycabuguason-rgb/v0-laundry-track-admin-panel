@@ -95,7 +95,7 @@ function PricingSettings() {
   ];
 
   return (
-    <>
+    <div className="relative flex flex-col min-h-full">
     <div className="space-y-5 w-full max-w-xl">
 
       {/* ── Base Pricing ─────────────────────────────────────────────────── */}
@@ -375,7 +375,7 @@ function PricingSettings() {
     </div>
 
     {/* ── Sticky Save Bar ──────────────────────────────────────────────────── */}
-    <div className="sticky bottom-0 left-0 right-0 z-20 bg-background border-t border-border px-4 py-3 mt-6 flex items-center justify-between gap-3 shadow-[0_-1px_4px_0_rgba(0,0,0,0.06)]">
+    <div className="sticky bottom-0 z-20 bg-background border-t border-border px-4 py-3 mt-6 flex items-center justify-between gap-3 shadow-[0_-1px_4px_0_rgba(0,0,0,0.06)]">
       {saved ? (
         <div className="flex items-center gap-2 text-green-700 bg-green-50 border border-green-200 rounded-lg px-4 py-2 text-sm animate-in fade-in slide-in-from-bottom-1">
           <CheckCircle2 className="w-4 h-4 shrink-0" />
@@ -397,7 +397,7 @@ function PricingSettings() {
         <Save className="w-3.5 h-3.5" /> Save Changes
       </Button>
     </div>
-    </>
+    </div>
   );
 }
 
