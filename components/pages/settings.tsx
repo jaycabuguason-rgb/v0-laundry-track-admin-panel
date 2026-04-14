@@ -276,7 +276,7 @@ function PricingSettings() {
             {addOns.map((a) => (
               <div key={a.id} className="flex items-center gap-2 bg-muted/30 rounded-md px-3 py-2">
                 <span className="flex-1 text-sm text-foreground">{a.name}</span>
-                <span className="text-sm text-muted-foreground">���{a.rate}</span>
+                <span className="text-sm text-muted-foreground">&#x20B1;{a.rate}</span>
                 <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => {
                   const next = addOns.filter((x) => x.id !== a.id);
                   setAddOns(next);
@@ -375,7 +375,7 @@ function PricingSettings() {
     </div>
 
     {/* ── Sticky Save Bar ──────────────────────────────────────────────────── */}
-    <div className="sticky bottom-0 z-10 bg-background border-t border-border px-0 py-3 mt-0 flex items-center justify-between gap-3">
+    <div className="sticky bottom-0 left-0 right-0 z-20 bg-background border-t border-border px-4 py-3 mt-6 flex items-center justify-between gap-3 shadow-[0_-1px_4px_0_rgba(0,0,0,0.06)]">
       {saved ? (
         <div className="flex items-center gap-2 text-green-700 bg-green-50 border border-green-200 rounded-lg px-4 py-2 text-sm animate-in fade-in slide-in-from-bottom-1">
           <CheckCircle2 className="w-4 h-4 shrink-0" />
