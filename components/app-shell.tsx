@@ -6,6 +6,7 @@ import TopNav from "@/components/topnav";
 import { TransactionDetailModal } from "@/components/transaction-detail-modal";
 import { transactions, type Transaction } from "@/lib/data";
 import { loadLoyaltySettings } from "@/lib/settings-store";
+import { signOut } from "@/lib/actions";
 import DashboardPage from "@/components/pages/dashboard";
 import TransactionsPage from "@/components/pages/transactions";
 import ClaimVerificationPage from "@/components/pages/claim-verification";
@@ -94,7 +95,10 @@ export default function AppShell({ onSignOut, adminProfile, onProfileUpdate }: A
         <TopNav
           activePage={activePage}
           onNavigate={handleNavigate}
-          onSignOut={onSignOut}
+          onSignOut={async () => {
+            await signOut();
+            onSignOut();
+          }}
           adminProfile={adminProfile}
           onMenuToggle={() => setMobileMenuOpen((v) => !v)}
           onTransactionDetail={handleTransactionDetail}

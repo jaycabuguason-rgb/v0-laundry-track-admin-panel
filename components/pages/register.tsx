@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { Eye, EyeOff, WashingMachine, CheckCircle2 } from "lucide-react";
+import { Eye, EyeOff, WashingMachine, CheckCircle2, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { signUp } from "@/lib/actions";
 
 interface RegisterPageProps {
   onBack: () => void;
@@ -28,6 +29,8 @@ export default function RegisterPage({ onBack }: RegisterPageProps) {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [errors, setErrors] = useState<FormErrors>({});
   const [success, setSuccess] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [serverError, setServerError] = useState("");
 
   const validate = (): FormErrors => {
     const errs: FormErrors = {};
@@ -61,14 +64,21 @@ export default function RegisterPage({ onBack }: RegisterPageProps) {
     return errs;
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     const errs = validate();
     setErrors(errs);
-    if (Object.keys(errs).length === 0) {
-      sessionStorage.setItem("prefill_email", email);
-      sessionStorage.setItem("prefill_password", password);
-      setSuccess(true);
+    if (Object.keys(errs).length !== 0) return;
+    setLoading(true);
+    setServerError("");
+    const result = await signUp(email, password, fullName, username);
+    setLoading(false);
+    if (result.error) {
+      setServerError(result.error);
+      return;
     }
+    sessionStorage.setItem("prefill_email", email);
+    sessionStorage.setItem("prefill_password", password);
+    setSuccess(true);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -126,6 +136,12 @@ export default function RegisterPage({ onBack }: RegisterPageProps) {
             /* ── Form State ── */
             <>
               <h1 className="text-base font-semibold text-foreground text-center mb-5">Create Admin Account</h1>
+
+              {serverError && (
+                <div className="mb-2 rounded-lg bg-destructive/10 border border-destructive/20 px-3 py-2 text-xs text-destructive font-medium text-center">
+                  {serverError}
+                </div>
+              )}
 
               <div className="flex flex-col gap-4">
                 {/* Full Name */}
@@ -249,8 +265,8 @@ export default function RegisterPage({ onBack }: RegisterPageProps) {
                 </div>
 
                 {/* Submit */}
-                <Button className="w-full mt-1 cursor-pointer" onClick={handleSubmit}>
-                  Create Account
+                <Button className="w-full mt-1 cursor-pointer" onClick={handleSubmit} disabled={loading}>
+                  {loading ? <><Loader2 className="w-4 h-4 animate-spin mr-2" />Creating account...</> : "Create Account"}
                 </Button>
 
                 {/* Back to login */}

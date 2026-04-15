@@ -25,7 +25,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { transactions as initialTxns, loyaltyMembers, statusColors, statusOrder, type Transaction, type PaymentStatus, type LoyaltyMember } from "@/lib/data";
+import { statusColors, statusOrder, type Transaction, type PaymentStatus, type LoyaltyMember } from "@/lib/data";
+import { useTransactions, useLoyaltyMembers } from "@/lib/hooks";
+import { createTransaction, updateTransactionStatus, updateTransactionPayment, addStamp } from "@/lib/actions";
 import {
   type ServiceType,
   type AddOn,
@@ -229,11 +231,13 @@ function NewTransactionWizard({
   onClose,
   onSubmit,
   loyaltyEnabled = true,
+  members = [],
 }: {
   open: boolean;
   onClose: () => void;
   onSubmit: (txn: Omit<Transaction, "id" | "ticketId">) => void;
   loyaltyEnabled?: boolean;
+  members?: LoyaltyMember[];
 }) {
   // Dynamic settings loaded from shared store
   const [serviceTypes, setServiceTypes]   = useState<ServiceType[]>([]);
@@ -318,7 +322,7 @@ function NewTransactionWizard({
     if (memberSearch.trim().length < 2) { setMemberSearchRes([]); return; }
     const q = memberSearch.toLowerCase();
     setMemberSearchRes(
-      loyaltyMembers.filter((m) =>
+      members.filter((m) =>
         m.name.toLowerCase().includes(q) || m.id.toLowerCase().includes(q) || m.phone.includes(q)
       )
     );
@@ -334,13 +338,13 @@ function NewTransactionWizard({
   };
 
   const handleManualFind = () => {
-    const found = loyaltyMembers.find((m) => m.id === manualId.trim());
+    const found = members.find((m) => m.id === manualId.trim());
     if (found) { selectMember(found); setManualError(""); }
     else setManualError("Member not found. Check the ID and try again.");
   };
 
   const handleQRScan = (val: string) => {
-    const found = loyaltyMembers.find((m) => m.id === val || m.phone === val);
+    const found = members.find((m) => m.id === val || m.phone === val);
     if (found) selectMember(found);
     else { setManualId(val); setManualError("Member not found. Check the ID and try again."); setShowScanner(false); }
   };
@@ -1021,8 +1025,43 @@ type HistoryEntry = {
   description: string;
 };
 
+// Map DB row → local Transaction shape
+function mapRow(r: Record<string, unknown>): Transaction {
+  const arrivalRaw = (r.arrival_time ?? r.created_at ?? "") as string;
+  const arrival = arrivalRaw ? new Date(arrivalRaw) : new Date();
+  return {
+    id:              String(r.id),
+    ticketId:        String(r.ticket_id),
+    customerName:    String(r.customer_name),
+    phone:           String(r.phone_number ?? ""),
+    arrivalDateTime: `${arrival.toISOString().slice(0, 10)} ${arrival.toTimeString().slice(0, 5)}`,
+    dropOffDate:     arrival.toISOString().slice(0, 10),
+    washType:        String(r.wash_type),
+    weight:          Number(r.weight_kg ?? 0),
+    fee:             Number(r.fee),
+    status:          (r.status as Transaction["status"]) ?? "Received",
+    paymentStatus:   (r.payment_status as PaymentStatus) ?? "unpaid",
+    addOns:          (r.addons as string[]) ?? [],
+    washInstructions: String(r.special_instructions ?? ""),
+  };
+}
+
 export default function TransactionsPage({ transactions: _unused, loyaltyEnabled = true }: { transactions?: unknown; loyaltyEnabled?: boolean }) {
-  const [txns, setTxns] = useState<Transaction[]>(initialTxns);
+  const { transactions: dbTxns, mutate: mutateTxns, isLoading: txnsLoading } = useTransactions();
+  const { loyaltyMembers: dbMembers } = useLoyaltyMembers();
+
+  // Map DB data to local shape
+  const dbMapped: Transaction[] = dbTxns.map((r) => mapRow(r as Record<string, unknown>));
+
+  const [txns, setTxns] = useState<Transaction[]>([]);
+
+  // Sync DB data into local state (keeps undo/redo working)
+  useEffect(() => {
+    if (dbMapped.length > 0 && txns.length === 0) {
+      setTxns(dbMapped);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dbMapped.length]);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [historyIdx, setHistoryIdx] = useState(-1);
 
@@ -1080,12 +1119,14 @@ export default function TransactionsPage({ transactions: _unused, loyaltyEnabled
   };
 
   // ── Actions ──────────────────────────────────────────────────────────────
-  const confirmVoid = () => {
+  const confirmVoid = async () => {
     if (!voidTxn || !voidReason.trim()) return;
     const updated = txns.map((t) =>
       t.id === voidTxn.id ? { ...t, status: "Voided" as const } : t
     );
     commit(updated, `Void ${voidTxn.ticketId}`);
+    await updateTransactionStatus(voidTxn.id, "Voided", voidReason);
+    mutateTxns();
     showToast(`Ticket #${voidTxn.ticketId} has been voided`);
     setVoidTxn(null);
     setVoidReason("");
@@ -1104,22 +1145,27 @@ export default function TransactionsPage({ transactions: _unused, loyaltyEnabled
     showToast(`Ticket #${editTxn.ticketId} moved to ${nextStatus}`);
   };
 
-  const saveInstructions = () => {
+  const saveInstructions = async () => {
     if (!editTxn) return;
     const updated = txns.map((t) =>
       t.id === editTxn.id ? { ...t, status: editStatus, paymentStatus: editPaymentStatus, washInstructions: editInstructions } : t
     );
     commit(updated, `Edit ${editTxn.ticketId}`);
+    await updateTransactionStatus(editTxn.id, editStatus);
+    await updateTransactionPayment(editTxn.id, editPaymentStatus);
+    mutateTxns();
     showToast(`Ticket #${editTxn.ticketId} updated successfully`);
     setEditTxn(null);
   };
 
-  const markAsClaimed = () => {
+  const markAsClaimed = async () => {
     if (!editTxn) return;
     const updated = txns.map((t) =>
       t.id === editTxn.id ? { ...t, status: "Claimed" as const, washInstructions: editInstructions } : t
     );
     commit(updated, `Claimed ${editTxn.ticketId}`);
+    await updateTransactionStatus(editTxn.id, "Claimed");
+    mutateTxns();
     showToast(`Ticket #${editTxn.ticketId} marked as Claimed`);
     setEditTxn(null);
   };
@@ -1131,13 +1177,29 @@ export default function TransactionsPage({ transactions: _unused, loyaltyEnabled
     setEditPaymentStatus(txn.paymentStatus);
   };
 
-  const handleNewTransaction = (partial: Omit<Transaction, "id" | "ticketId">) => {
-    const newId     = String(txns.length + 1);
-    const newTicket = `TKT-${String(txns.length + 1).padStart(4, "0")}`;
-    const newTxn: Transaction = { id: newId, ticketId: newTicket, ...partial };
+  const handleNewTransaction = async (partial: Omit<Transaction, "id" | "ticketId">) => {
+    const newTicket = `TKT-${String(dbTxns.length + txns.length + 1).padStart(4, "0")}`;
+    const result = await createTransaction({
+      ticket_id: newTicket,
+      customer_name: partial.customerName,
+      phone_number: partial.phone,
+      wash_type: partial.washType,
+      weight_kg: partial.weight,
+      addons: partial.addOns,
+      special_instructions: partial.washInstructions,
+      fee: partial.fee,
+      status: partial.status,
+      arrival_time: new Date().toISOString(),
+    });
+    if (result.error) { showToast("Error saving transaction."); return; }
+    const newTxn: Transaction = {
+      id: result.data?.id ?? String(Date.now()),
+      ticketId: newTicket,
+      ...partial,
+    };
     commit([newTxn, ...txns], `New transaction ${newTicket}`);
+    mutateTxns();
     showToast(`Ticket #${newTicket} created for ${partial.customerName}`);
-    // Prompt to print receipt
     setPrintTxn(newTxn);
     setPrintPostCreate(true);
   };
@@ -1702,6 +1764,17 @@ export default function TransactionsPage({ transactions: _unused, loyaltyEnabled
         onClose={() => setShowWizard(false)}
         onSubmit={handleNewTransaction}
         loyaltyEnabled={loyaltyEnabled}
+        members={dbMembers.map((m: Record<string, unknown>) => ({
+          id: String(m.id),
+          name: String(m.full_name),
+          phone: String(m.phone_number ?? ""),
+          stampCount: Number(m.stamp_count ?? 0),
+          rewardsRedeemed: Number(m.rewards_redeemed ?? 0),
+          dateJoined: String((m.date_joined as string ?? "").slice(0, 10)),
+          stampHistory: (m.stamp_history as unknown[]) ?? [],
+          rewardHistory: (m.reward_history as unknown[]) ?? [],
+          preferences: String(m.preferences ?? ""),
+        }))}
       />
 
       {/* ── PRINT RECEIPT MODAL ──────────────────────────────────────────────── */}

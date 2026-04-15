@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { loyaltyMembers, type LoyaltyMember } from "@/lib/data";
+import { type LoyaltyMember } from "@/lib/data";
+import { useLoyaltyMembers } from "@/lib/hooks";
 
 function StampDots({ count, max = 21 }: { count: number; max?: number }) {
   return (
@@ -26,7 +27,29 @@ export default function LoyaltyPage({ loyaltyEnabled = true }: { loyaltyEnabled?
   const [selected, setSelected] = useState<LoyaltyMember | null>(null);
   const [rewardCycleModal, setRewardCycleModal] = useState<{ date: string; reward: string } | null>(null);
 
-  // Loyalty config - in real app this would come from settings
+  const { loyaltyMembers: dbMembers, isLoading } = useLoyaltyMembers();
+
+  // Map DB rows to LoyaltyMember shape
+  const loyaltyMembers: LoyaltyMember[] = dbMembers.map((m: Record<string, unknown>) => ({
+    id: String(m.id),
+    name: String(m.full_name),
+    phone: String(m.phone_number ?? ""),
+    stampCount: Number(m.stamp_count ?? 0),
+    rewardsRedeemed: Number(m.rewards_redeemed ?? 0),
+    dateJoined: String((m.date_joined as string ?? "").slice(0, 10)),
+    stampHistory: ((m.stamp_history as { created_at: string; stamps_added: number; transaction_id: string }[]) ?? []).map((s) => ({
+      date: String(s.created_at ?? "").slice(0, 10),
+      stamps: Number(s.stamps_added ?? 1),
+      ticket: String(s.transaction_id ?? ""),
+    })),
+    rewardHistory: ((m.reward_history as { redeemed_at: string; reward_type: string }[]) ?? []).map((r) => ({
+      date: String(r.redeemed_at ?? "").slice(0, 10),
+      reward: String(r.reward_type ?? ""),
+    })),
+    preferences: String(m.preferences ?? ""),
+  }));
+
+  // Loyalty config
   const washesPerReward = 10;
   const rewardName = "Free wash";
 

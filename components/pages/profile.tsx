@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Camera, CheckCircle2 } from "lucide-react";
+import { updateProfile } from "@/lib/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -43,10 +44,15 @@ export default function ProfilePage({ adminProfile, onProfileUpdate }: ProfilePa
 
   const isDirty = phone !== (adminProfile.phone || "");
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const err = validatePhone(phone);
     setPhoneError(err);
     if (err) return;
+    const result = await updateProfile({ phone_number: phone });
+    if (result?.error) {
+      setPhoneError(result.error);
+      return;
+    }
     onProfileUpdate({ phone });
     setToast(true);
     setTimeout(() => setToast(false), 3000);

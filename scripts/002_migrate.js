@@ -1,9 +1,11 @@
-import { createClient } from "@supabase/supabase-js";
+import pg from "pg";
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+// Allow self-signed certs in Supabase's certificate chain
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+
+const client = new pg.Client({
+  connectionString: process.env.POSTGRES_URL_NON_POOLING,
+});
 
 const sql = `
 -- ── profiles ─────────────────────────────────────────────────────────────────
@@ -217,34 +219,16 @@ on conflict do nothing;
 `;
 
 async function run() {
-  console.log("Running LaundryTrack database migration...");
-
-  const { error } = await supabase.rpc("exec_sql", { sql_query: sql }).single();
-
-  if (error) {
-    // Supabase JS client doesn't support raw SQL directly, use REST API
-    const res = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/rpc/exec_sql`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        apikey: process.env.SUPABASE_SERVICE_ROLE_KEY,
-        Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`,
-      },
-      body: JSON.stringify({ sql_query: sql }),
-    });
-    console.log("RPC response status:", res.status);
-  }
-
-  // Use postgres directly via POSTGRES_URL
-  const { default: pg } = await import("pg");
-  const client = new pg.Client({ connectionString: process.env.POSTGRES_URL_NON_POOLING });
+  console.log("Connecting to Supabase PostgreSQL...");
   await client.connect();
+  console.log("Connected. Running migration...");
 
   try {
     await client.query(sql);
     console.log("Migration completed successfully!");
   } catch (err) {
     console.error("Migration error:", err.message);
+    process.exit(1);
   } finally {
     await client.end();
   }

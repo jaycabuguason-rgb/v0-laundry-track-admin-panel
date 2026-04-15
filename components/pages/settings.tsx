@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { type Page } from "@/components/sidebar";
 import { cn } from "@/lib/utils";
+import { upsertSetting } from "@/lib/actions";
 import {
   transactions,
   loyaltyMembers,
@@ -386,9 +387,12 @@ function PricingSettings() {
       )}
       <Button
         size="sm"
-        onClick={() => {
+        onClick={async () => {
           persistPricingConfig({ pricePerKg, minWeight, pricingMode, loadTiers, priceDisplayMode });
           persistAddOns(addOns);
+          await upsertSetting("pricing", { pricePerKg, minWeight, pricingMode, priceDisplayMode });
+          await upsertSetting("addons", addOns);
+          await upsertSetting("load_tiers", loadTiers);
           setSaved(true);
           setTimeout(() => setSaved(false), 3000);
         }}
@@ -741,8 +745,9 @@ function BusinessProfileSettings() {
     reader.readAsDataURL(file);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     persistBusinessProfile(profile);
+    await upsertSetting("business_profile", profile);
     setSaved(true);
     setTimeout(() => setSaved(false), 3000);
   };
@@ -1094,8 +1099,9 @@ function LoyaltyProgramSettings({ loyaltyEnabled, onLoyaltyEnabledChange }: Loya
   );
   const [saved, setSaved] = useState(false);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     persistLoyaltySettings({ enabled, washesPerReward, rewardDescription });
+    await upsertSetting("loyalty", { enabled, washesPerReward, rewardDescription });
     onLoyaltyEnabledChange(enabled);
     setSaved(true);
     setTimeout(() => setSaved(false), 3000);
