@@ -57,7 +57,7 @@ export default function AppShell({ onSignOut, adminProfile, onProfileUpdate }: A
       case "settings-data-import":
         return <DataImportPage onViewTransactions={() => handleNavigate("transactions")} />;
       case "loyalty": return <LoyaltyPage loyaltyEnabled={loyaltyEnabled} />;
-      case "profile": return <ProfilePage adminProfile={adminProfile} />;
+      case "profile": return <ProfilePage adminProfile={adminProfile} onProfileUpdate={onProfileUpdate} />;
       case "change-password": return <ChangePasswordPage adminProfile={adminProfile} onProfileUpdate={onProfileUpdate} />;
       default: return <DashboardPage transactions={txns} loyaltyEnabled={loyaltyEnabled} />;
     }
