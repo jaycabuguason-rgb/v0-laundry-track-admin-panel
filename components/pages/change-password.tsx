@@ -316,13 +316,19 @@ export default function ChangePasswordPage({ adminProfile, onProfileUpdate }: Ch
             <p className="text-xs text-destructive">Passwords do not match.</p>
           )}
 
+          {pwError && (
+            <p className="text-xs text-destructive font-medium">{pwError}</p>
+          )}
+
           <Button
             className="w-full cursor-pointer"
-            disabled={!canSavePw}
+            disabled={!canSavePw || pwLoading}
             onClick={handleSavePw}
           >
-            <Save className="w-3.5 h-3.5 mr-1.5" />
-            Save New Password
+            {pwLoading
+              ? <><Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />Saving...</>
+              : <><Save className="w-3.5 h-3.5 mr-1.5" />Save New Password</>
+            }
           </Button>
 
           {pwSuccess && (
