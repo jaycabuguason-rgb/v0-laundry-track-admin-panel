@@ -50,18 +50,33 @@ export default function ForgotPasswordPage({ onBack }: ForgotPasswordPageProps) 
           {submitted ? (
             /* Success state */
             <div className="flex flex-col items-center text-center gap-4">
-              <div className="w-14 h-14 rounded-full bg-green-100 flex items-center justify-center">
-                <CheckCircle2 className="w-7 h-7 text-green-600" />
+              <div className="w-16 h-16 rounded-full bg-blue-100 flex items-center justify-center">
+                <Mail className="w-8 h-8 text-primary" />
               </div>
-              <div>
+              <div className="flex flex-col gap-1.5">
                 <h1 className="text-base font-semibold text-foreground">Reset Link Sent!</h1>
-                <p className="text-xs text-muted-foreground mt-2 leading-relaxed">
-                  Please check your email inbox and follow the instructions to reset your password.
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  We have sent a password reset link to:
                 </p>
+                <p className="text-sm font-semibold text-foreground">{email}</p>
               </div>
-              <Button className="w-full mt-2 cursor-pointer" onClick={onBack}>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Please check your inbox and spam folder.<br />
+                The link will expire in 30 minutes.
+              </p>
+              <Button className="w-full cursor-pointer" onClick={onBack}>
                 Back to Login
               </Button>
+              <p className="text-xs text-muted-foreground">
+                {"Didn't receive the email? "}
+                <button
+                  type="button"
+                  onClick={() => setSubmitted(false)}
+                  className="text-primary font-medium hover:underline cursor-pointer"
+                >
+                  Resend reset link
+                </button>
+              </p>
             </div>
           ) : (
             /* Form state */
