@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { Eye, EyeOff, WashingMachine } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Eye, EyeOff, WashingMachine, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,6 +18,20 @@ export default function LoginPage({ onLogin, onForgotPassword, onCreateAccount }
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState(false);
+  const [prefillBanner, setPrefillBanner] = useState(false);
+
+  useEffect(() => {
+    const prefillEmail = sessionStorage.getItem("prefill_email");
+    const prefillPassword = sessionStorage.getItem("prefill_password");
+    if (prefillEmail && prefillPassword) {
+      setEmail(prefillEmail);
+      setPassword(prefillPassword);
+      setRememberMe(true);
+      setPrefillBanner(true);
+      sessionStorage.removeItem("prefill_email");
+      sessionStorage.removeItem("prefill_password");
+    }
+  }, []);
 
   const handleLogin = () => {
     if (!email.trim() || !password.trim()) {
@@ -57,6 +71,24 @@ export default function LoginPage({ onLogin, onForgotPassword, onCreateAccount }
           </div>
 
           <h1 className="text-base font-semibold text-foreground text-center mb-6">Admin Login</h1>
+
+          {/* Prefill banner */}
+          {prefillBanner && (
+            <div className="mb-4 flex items-start gap-2 rounded-lg bg-blue-50 border border-blue-200 px-3 py-2.5 text-xs text-blue-800">
+              <span className="shrink-0 mt-0.5">&#10003;</span>
+              <span className="flex-1 leading-relaxed">
+                Credentials filled from your recent registration. Just click Login to continue.
+              </span>
+              <button
+                type="button"
+                onClick={() => setPrefillBanner(false)}
+                className="shrink-0 text-blue-400 hover:text-blue-700 transition-colors cursor-pointer"
+                aria-label="Dismiss"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
 
           {/* Error banner */}
           {error && (

@@ -65,6 +65,8 @@ export default function RegisterPage({ onBack }: RegisterPageProps) {
     const errs = validate();
     setErrors(errs);
     if (Object.keys(errs).length === 0) {
+      sessionStorage.setItem("prefill_email", email);
+      sessionStorage.setItem("prefill_password", password);
       setSuccess(true);
     }
   };
@@ -109,7 +111,8 @@ export default function RegisterPage({ onBack }: RegisterPageProps) {
                 <h1 className="text-base font-semibold text-foreground">Account Created Successfully!</h1>
                 <p className="text-xs text-muted-foreground leading-relaxed">
                   Your admin account has been created.<br />
-                  You can now log in with your credentials.
+                  Click below to proceed to login —<br />
+                  your credentials have been filled in automatically.
                 </p>
               </div>
               <div className="w-full rounded-lg bg-muted px-4 py-2.5 text-xs text-muted-foreground text-center">
