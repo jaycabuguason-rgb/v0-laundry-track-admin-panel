@@ -1,14 +1,13 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Eye, EyeOff, WashingMachine, X, Loader2 } from "lucide-react";
+import { Eye, EyeOff, WashingMachine, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { signIn } from "@/lib/actions";
 
 interface LoginPageProps {
-  onLogin: (profile: { name: string; email: string; username: string; phone: string }) => void;
+  onLogin: () => void;
   onForgotPassword: () => void;
   onCreateAccount: () => void;
 }
@@ -18,8 +17,7 @@ export default function LoginPage({ onLogin, onForgotPassword, onCreateAccount }
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(false);
   const [prefillBanner, setPrefillBanner] = useState(false);
 
   useEffect(() => {
@@ -35,27 +33,13 @@ export default function LoginPage({ onLogin, onForgotPassword, onCreateAccount }
     }
   }, []);
 
-  const handleLogin = async () => {
+  const handleLogin = () => {
     if (!email.trim() || !password.trim()) {
-      setError("Please fill in all fields.");
+      setError(true);
       return;
     }
-    setError("");
-    setLoading(true);
-    const result = await signIn(email, password);
-    setLoading(false);
-    if (result.error) {
-      setError(result.error === "Invalid login credentials"
-        ? "Incorrect email or password. Please try again."
-        : result.error);
-      return;
-    }
-    onLogin({
-      name: result.user?.user_metadata?.full_name ?? "Admin",
-      email: result.user?.email ?? email,
-      username: result.user?.user_metadata?.username ?? "",
-      phone: "",
-    });
+    setError(false);
+    onLogin();
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -109,7 +93,7 @@ export default function LoginPage({ onLogin, onForgotPassword, onCreateAccount }
           {/* Error banner */}
           {error && (
             <div className="mb-4 rounded-lg bg-destructive/10 border border-destructive/20 px-3 py-2 text-xs text-destructive font-medium text-center">
-              {error}
+              Please fill in all fields.
             </div>
           )}
 
@@ -173,9 +157,8 @@ export default function LoginPage({ onLogin, onForgotPassword, onCreateAccount }
             <Button
               className="w-full mt-1 cursor-pointer"
               onClick={handleLogin}
-              disabled={loading}
             >
-              {loading ? <><Loader2 className="w-4 h-4 animate-spin mr-2" />Logging in...</> : "Login"}
+              Login
             </Button>
 
             {/* Forgot password */}

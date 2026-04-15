@@ -1,14 +1,13 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Eye, EyeOff, Save, CheckCircle2, Circle, Loader2 } from "lucide-react";
+import { Eye, EyeOff, Save, CheckCircle2, Circle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import type { AdminProfile } from "@/app/page";
-import { updatePassword, updateEmail, updateProfile } from "@/lib/actions";
 
 interface Requirement {
   label: string;
@@ -81,42 +80,27 @@ export default function ChangePasswordPage({ adminProfile, onProfileUpdate }: Ch
   const [newUsername, setNewUsername]           = useState("");
   const [credCurrentPassword, setCredCurrentPassword] = useState("");
   const [credSuccess, setCredSuccess]           = useState(false);
-  const [credError, setCredError]               = useState("");
-  const [credLoading, setCredLoading]           = useState(false);
 
   // Keep the "Current Email" field in sync whenever the parent profile updates
   useEffect(() => {
     setCredCurrentEmail(adminProfile.email);
   }, [adminProfile.email]);
 
-  const canSaveCred = credCurrentPassword.trim().length > 0 && (newEmail.trim().length > 0 || newUsername.trim().length > 0);
+  const canSaveCred = credCurrentPassword.trim().length > 0;
 
-  const handleCredSave = async () => {
+  const handleCredSave = () => {
     if (!canSaveCred) return;
-    setCredError("");
-    setCredLoading(true);
-    try {
-      const profileUpdates: { username?: string } = {};
-      if (newUsername.trim()) profileUpdates.username = newUsername.trim();
-
-      if (newEmail.trim()) {
-        const result = await updateEmail(credCurrentPassword, newEmail.trim());
-        if (result?.error) { setCredError(result.error); return; }
-        onProfileUpdate({ email: newEmail.trim() });
-      }
-      if (newUsername.trim()) {
-        const result = await updateProfile({ username: newUsername.trim() });
-        if (result?.error) { setCredError(result.error); return; }
-        onProfileUpdate({ username: newUsername.trim() });
-      }
-      setNewEmail("");
-      setNewUsername("");
-      setCredCurrentPassword("");
-      setCredSuccess(true);
-      setTimeout(() => setCredSuccess(false), 4000);
-    } finally {
-      setCredLoading(false);
+    const updates: Partial<AdminProfile> = {};
+    if (newEmail.trim()) updates.email = newEmail.trim();
+    if (newUsername.trim()) updates.username = newUsername.trim();
+    if (Object.keys(updates).length > 0) {
+      onProfileUpdate(updates);
     }
+    setNewEmail("");
+    setNewUsername("");
+    setCredCurrentPassword("");
+    setCredSuccess(true);
+    setTimeout(() => setCredSuccess(false), 4000);
   };
 
   // --- Change Password state ---
@@ -124,27 +108,17 @@ export default function ChangePasswordPage({ adminProfile, onProfileUpdate }: Ch
   const [newPw, setNewPw]     = useState("");
   const [confirm, setConfirm] = useState("");
   const [pwSuccess, setPwSuccess] = useState(false);
-  const [pwError, setPwError]     = useState("");
-  const [pwLoading, setPwLoading] = useState(false);
 
   const strength    = getStrength(newPw);
   const allPassed   = requirements.every((r) => r.test(newPw));
   const pwMatch     = newPw.length > 0 && newPw === confirm;
   const canSavePw   = current.length > 0 && allPassed && pwMatch;
 
-  const handleSavePw = async () => {
+  const handleSavePw = () => {
     if (!canSavePw) return;
-    setPwError("");
-    setPwLoading(true);
-    try {
-      const result = await updatePassword(current, newPw);
-      if (result?.error) { setPwError(result.error); return; }
-      setCurrent(""); setNewPw(""); setConfirm("");
-      setPwSuccess(true);
-      setTimeout(() => setPwSuccess(false), 4000);
-    } finally {
-      setPwLoading(false);
-    }
+    setPwSuccess(true);
+    setCurrent(""); setNewPw(""); setConfirm("");
+    setTimeout(() => setPwSuccess(false), 4000);
   };
 
   return (
@@ -209,16 +183,12 @@ export default function ChangePasswordPage({ adminProfile, onProfileUpdate }: Ch
             placeholder="Enter current password to confirm"
           />
 
-          {credError && (
-            <p className="text-xs text-destructive font-medium">{credError}</p>
-          )}
-
           <Button
             className="w-full cursor-pointer bg-primary text-primary-foreground hover:bg-primary/90"
-            disabled={!canSaveCred || credLoading}
+            disabled={!canSaveCred}
             onClick={handleCredSave}
           >
-            {credLoading ? <><Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />Saving...</> : "Save Changes"}
+            Save Changes
           </Button>
 
           {credSuccess && (
@@ -316,19 +286,13 @@ export default function ChangePasswordPage({ adminProfile, onProfileUpdate }: Ch
             <p className="text-xs text-destructive">Passwords do not match.</p>
           )}
 
-          {pwError && (
-            <p className="text-xs text-destructive font-medium">{pwError}</p>
-          )}
-
           <Button
             className="w-full cursor-pointer"
-            disabled={!canSavePw || pwLoading}
+            disabled={!canSavePw}
             onClick={handleSavePw}
           >
-            {pwLoading
-              ? <><Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />Saving...</>
-              : <><Save className="w-3.5 h-3.5 mr-1.5" />Save New Password</>
-            }
+            <Save className="w-3.5 h-3.5 mr-1.5" />
+            Save New Password
           </Button>
 
           {pwSuccess && (

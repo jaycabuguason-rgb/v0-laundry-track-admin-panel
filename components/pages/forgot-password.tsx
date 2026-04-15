@@ -1,11 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { WashingMachine, ArrowLeft, CheckCircle2, Mail, Loader2 } from "lucide-react";
+import { WashingMachine, ArrowLeft, CheckCircle2, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { resetPasswordEmail } from "@/lib/actions";
 
 interface ForgotPasswordPageProps {
   onBack: () => void;
@@ -16,17 +15,13 @@ export default function ForgotPasswordPage({ onBack, onResetPassword }: ForgotPa
   const [email, setEmail] = useState("");
   const [error, setError] = useState(false);
   const [submitted, setSubmitted] = useState(false);
-  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async () => {
+  const handleSubmit = () => {
     if (!email.trim()) {
       setError(true);
       return;
     }
     setError(false);
-    setLoading(true);
-    await resetPasswordEmail(email);
-    setLoading(false);
     setSubmitted(true);
   };
 
@@ -125,8 +120,8 @@ export default function ForgotPasswordPage({ onBack, onResetPassword }: ForgotPa
                   </div>
                 </div>
 
-                <Button className="w-full cursor-pointer" onClick={handleSubmit} disabled={loading}>
-                  {loading ? <><Loader2 className="w-4 h-4 animate-spin mr-2" />Sending...</> : "Send Reset Link"}
+                <Button className="w-full cursor-pointer" onClick={handleSubmit}>
+                  Send Reset Link
                 </Button>
 
                 <button
