@@ -8,9 +8,10 @@ import { Label } from "@/components/ui/label";
 
 interface ForgotPasswordPageProps {
   onBack: () => void;
+  onResetPassword?: () => void;
 }
 
-export default function ForgotPasswordPage({ onBack }: ForgotPasswordPageProps) {
+export default function ForgotPasswordPage({ onBack, onResetPassword }: ForgotPasswordPageProps) {
   const [email, setEmail] = useState("");
   const [error, setError] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -64,7 +65,12 @@ export default function ForgotPasswordPage({ onBack }: ForgotPasswordPageProps) 
                 Please check your inbox and spam folder.<br />
                 The link will expire in 30 minutes.
               </p>
-              <Button className="w-full cursor-pointer" onClick={onBack}>
+              {onResetPassword && (
+                <Button className="w-full cursor-pointer" onClick={onResetPassword}>
+                  Enter Confirmation Code
+                </Button>
+              )}
+              <Button variant="outline" className="w-full cursor-pointer" onClick={onBack}>
                 Back to Login
               </Button>
               <p className="text-xs text-muted-foreground">
